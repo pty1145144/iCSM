@@ -4,6 +4,10 @@
 
 This source kit targets iPhone and iPad. The native Source game modules, SDL, and Metal backend are compiled locally from source. It does not include precompiled game frameworks, the author's signing credentials, account settings, or device configuration. Third-party static dependencies such as V8 and font/video libraries, along with generated protocol headers, are provided. Maps, materials, skin previews, and offline shader libraries are supplied separately in `iCSM-Data.zip`.
 
+## Windows / browser-based builds
+
+Use the [GitHub Actions cloud build guide](CLOUD_BUILD.en.md) to build from Windows without a local Mac, then sign and install the IPA with your own account. The local Xcode build below requires macOS.
+
 ## 1. Build and install on a Mac
 
 Requirements: macOS, Xcode with the iPhoneOS 27.x SDK, Python 3, and an internet connection for the first installation of pinned CMake and Ninja versions. The minimum device OS is iOS / iPadOS 27.0. Windows can transfer game data; it cannot run the Xcode build.

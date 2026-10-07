@@ -14,6 +14,8 @@ A personal CSGO port by **BILIBILI @SU_ZeShin** for **iPhone and iPad**, running
 
 ## Build and install
 
+**Windows / cloud builds:** follow the [cloud build and Windows installation guide](docs/CLOUD_BUILD.en.md) to build an IPA in GitHub Actions, then sign it with your own Apple account. The commands below are for local Mac builds.
+
 Requires **macOS, Xcode with the iPhoneOS 27.x SDK, and Python 3**. The device must run **iOS / iPadOS 27.0 or later**. Sign in to your own Apple account in **Xcode → Settings → Accounts**, connect and unlock your device, and enable Developer Mode.
 
 Clone the repository and run the following from its root directory:

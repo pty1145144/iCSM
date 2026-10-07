@@ -8,6 +8,7 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 set(CMAKE_INSTALL_RPATH "@executable_path/Frameworks")
 set(I5_TEAM "" CACHE STRING "Development team")
 set(I5_BUNDLE_ID "local.csgo.ipados.i0probe" CACHE STRING "Existing app slot")
+option(ICSM_SIGN_APP "Sign and provision the app with the local Apple account" ON)
 add_executable(CSGOI5Client MACOSX_BUNDLE main.mm data_install.mm
  "${PORT}/vendor/minizip-1.3.1/unzip.c" "${PORT}/vendor/minizip-1.3.1/ioapi.c"
  "${PORT}/provenance/i0/asset-content-manifest.json")
@@ -50,7 +51,11 @@ if(NOT framework_count EQUAL 35)
  message(FATAL_ERROR "Expected 35 native iOS frameworks; received ${framework_count}")
 endif()
 set_target_properties(CSGOI5Client PROPERTIES XCODE_EMBED_FRAMEWORKS "${frameworks}"
- XCODE_EMBED_FRAMEWORKS_CODE_SIGN_ON_COPY YES XCODE_EMBED_FRAMEWORKS_REMOVE_HEADERS_ON_COPY YES)
+ XCODE_EMBED_FRAMEWORKS_CODE_SIGN_ON_COPY "${ICSM_SIGN_APP}" XCODE_EMBED_FRAMEWORKS_REMOVE_HEADERS_ON_COPY YES)
+if(NOT ICSM_SIGN_APP)
+ set_target_properties(CSGOI5Client PROPERTIES XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO
+  XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED NO XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
+endif()
 # Apple QA1940: Finder resource metadata cannot be present in a signed bundle.
 # Xcode runs target post-build scripts before its final application CodeSign.
 add_custom_command(TARGET CSGOI5Client POST_BUILD

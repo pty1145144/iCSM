@@ -13,6 +13,7 @@ import venv
 import zipfile
 import hashlib
 import shlex
+import re
 
 ROOT = Path(__file__).resolve().parent
 BUILD = ROOT / 'Build'
@@ -97,6 +98,7 @@ def native(jobs):
                     run(item['post'], cwd=ROOT, stdout=stream, stderr=subprocess.STDOUT)
                 marker.write_text(signature)
             except subprocess.CalledProcessError:
+                print('\n'.join(log.read_text(errors='replace').splitlines()[-60:]), file=sys.stderr, flush=True)
                 raise RuntimeError('Compilation failed; see ' + str(log))
         return item['output']
     pending = list(plan['jobs'])
@@ -123,29 +125,46 @@ def native(jobs):
     (BUILD / 'native-complete.json').write_text(json.dumps({'jobs':len(done),'frameworks':len(plan['frameworks'])})+'\n')
 
 
-def app_build():
-    config = settings();binaries = BUILD / 'Frameworks'
+def app_build(unsigned=False, bundle_id=None):
+    # Cloud builds use no personal settings, account, certificate or device.
+    config = {'team':'', 'bundle_id':bundle_id or 'com.icsm.client', 'device':''} if unsigned else settings()
+    binaries = BUILD / 'Frameworks'
+    app_build_dir = APP_BUILD.with_name('app-unsigned') if unsigned else APP_BUILD
     if not (BUILD / 'native-complete.json').exists():
         raise SystemExit('First run ./icsm modules (the game is compiled from source).')
     cmake = tools() / 'cmake'
     source = ROOT / 'Sources/workspace/ipados-arm64/app/i5'
-    run([cmake, '-S', source, '-B', APP_BUILD, '-G', 'Xcode',
+    run([cmake, '-S', source, '-B', app_build_dir, '-G', 'Xcode',
          '-DCMAKE_SYSTEM_NAME=iOS', '-DCMAKE_OSX_SYSROOT=iphoneos',
          '-DCMAKE_OSX_ARCHITECTURES=arm64', '-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0',
-         '-DICSM_FRAMEWORK_DIR=' + str(binaries), '-DI5_TEAM=' + config['team'], '-DI5_BUNDLE_ID=' + config['bundle_id']])
-    run(['xcodebuild', '-project', APP_BUILD / 'CSGOI5Client.xcodeproj', '-scheme','CSGOI5Client',
+         '-DICSM_FRAMEWORK_DIR=' + str(binaries), '-DI5_TEAM=' + config['team'], '-DI5_BUNDLE_ID=' + config['bundle_id'],
+         '-DICSM_SIGN_APP=' + ('OFF' if unsigned else 'ON')])
+    command = ['xcodebuild', '-project', app_build_dir / 'CSGOI5Client.xcodeproj', '-scheme','CSGOI5Client',
          '-configuration','Release','-destination',
-         'id='+config['device'] if config.get('device') else 'generic/platform=iOS',
-         '-allowProvisioningUpdates','-allowProvisioningDeviceRegistration','build'])
-    app = APP_BUILD / 'Release-iphoneos/CSGOI5Client.app'
+         'id='+config['device'] if config.get('device') else 'generic/platform=iOS']
+    if unsigned:
+        command += ['CODE_SIGNING_ALLOWED=NO', 'CODE_SIGNING_REQUIRED=NO', 'CODE_SIGN_IDENTITY=']
+    else:
+        command += ['-allowProvisioningUpdates', '-allowProvisioningDeviceRegistration']
+    run(command + ['build'])
+    app = app_build_dir / 'Release-iphoneos/CSGOI5Client.app'
+    if unsigned:
+        # Ad-hoc signatures are transport signatures, not device provisioning.
+        # Retain the memory entitlement for the user's final signing tool.
+        for framework in sorted((app / 'Frameworks').glob('*.framework')):
+            run(['codesign', '--force', '--sign', '-', framework])
+        entitlements = source.parent / 'i0/Memory.entitlements'
+        run(['codesign', '--force', '--sign', '-', '--entitlements', entitlements, app])
+        shutil.copyfile(entitlements, BUILD / 'iCSM.entitlements')
+        if list(app.rglob('*.mobileprovision')):
+            raise RuntimeError('An unsigned export must not contain a provisioning profile.')
     run(['codesign','--verify','--deep','--strict',app])
-    # The exact locally signed app: no resigning with somebody else's identity.
-    archive = BUILD / 'iCSM.ipa'
+    archive = BUILD / ('iCSM-unsigned.ipa' if unsigned else 'iCSM.ipa')
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as ipa:
         for path in sorted(app.rglob('*')):
             if path.is_file():
                 ipa.write(path, 'Payload/' + app.name + '/' + path.relative_to(app).as_posix())
-    print('Your signed IPA: ' + str(archive), flush=True)
+    print(('IPA for personal re-signing: ' if unsigned else 'Your signed IPA: ') + str(archive), flush=True)
     return app
 
 
@@ -154,7 +173,13 @@ def main():
     parser.add_argument('action', choices=['doctor','setup','modules','build','app','install','launch'])
     parser.add_argument('--team');parser.add_argument('--bundle-id');parser.add_argument('--device')
     parser.add_argument('--jobs',type=int,default=min(6,os.cpu_count() or 4))
+    parser.add_argument('--unsigned', action='store_true',
+                        help='Export an ad-hoc IPA without an Apple account/profile; re-sign before installing')
     args = parser.parse_args()
+    if args.unsigned and args.action not in ['build','app']:
+        parser.error('--unsigned is supported only for build and app')
+    if args.bundle_id and not re.fullmatch(r'[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+', args.bundle_id):
+        parser.error('Use a reverse-domain bundle ID containing letters, digits, hyphens and dots')
     if sys.platform!='darwin':
         raise SystemExit('Build/sign on macOS with Xcode. Windows can import iCSM-Data.zip using Apple Devices.')
     if args.action == 'doctor':
@@ -170,7 +195,7 @@ def main():
     if args.action in ['modules','build']:
         native(max(1,args.jobs))
     if args.action in ['build','app']:
-        app_build()
+        app_build(args.unsigned, args.bundle_id)
     if args.action in ['install','launch']:
         config = settings();device = args.device or config.get('device')
         if not device:

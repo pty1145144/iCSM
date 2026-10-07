@@ -16,6 +16,8 @@ A personal CSGO port by **BILIBILI @SU_ZeShin** for **iPhone and iPad**, running
 
 ## Build and install
 
+**Windows / cloud builds:** follow the [cloud build and Windows installation guide](docs/CLOUD_BUILD.en.md) to build an IPA in GitHub Actions, then sign it with your own Apple account. The commands below are for local Mac builds.
+
 Requires **macOS, Xcode with the iPhoneOS 27.x SDK, and Python 3**. The device must run **iOS / iPadOS 27.0 or later**. Sign in to your own Apple account in **Xcode → Settings → Accounts**, connect and unlock your device, and enable Developer Mode.
 
 Clone the repository and run the following from its root directory:
@@ -68,6 +70,8 @@ This is a personal port. **Commercial use is prohibited.** CSGO, the Source engi
 - **离线库存与移动设置**：枪械／刀具及皮肤选择、皮肤预览、系统键盘改名、屏幕尺寸适配、60／90／120 帧限制，以及自建私人服务器连接。
 
 ## 编译与安装
+
+**Windows / 云编译：** 按[云编译与 Windows 安装指南](docs/CLOUD_BUILD.md)，在 GitHub Actions 生成 IPA，再用自己的 Apple 账户签名安装。下方命令用于 Mac 本机编译。
 
 需要 **macOS、Xcode（iPhoneOS 27.x SDK）、Python 3**，设备系统至少为 **iOS / iPadOS 27.0**。先在 Xcode → Settings → Accounts 登录自己的 Apple 账户，连接并解锁设备，开启开发者模式。
 

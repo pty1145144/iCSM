@@ -4,6 +4,10 @@
 
 本套件只用于 iPhone / iPad。原生 Source 游戏模块、SDL 和 Metal 后端由本地源码编译；套件不含已经编译的游戏框架、作者签名、账户或设备配置。V8、字体/视频等第三方静态依赖以及构建时生成的协议头文件已提供。游戏地图、材质、皮肤预览与离线着色器另在 `iCSM-Data.zip` 中。
 
+## Windows / 浏览器云编译
+
+无需本地 Mac 的用户请按[GitHub Actions 云编译指南](CLOUD_BUILD.md)生成 IPA，再用自己的账户签名安装。以下本机 Xcode 编译流程需要 macOS。
+
 ## 1. 在 Mac 上编译并安装
 
 需要 macOS、带 iPhoneOS 27.x SDK 的 Xcode、Python 3 和网络（首次安装固定版本的 CMake / Ninja）。当前应用最低系统为 iOS / iPadOS 27.0。Windows 用于导入数据，不能直接运行 Xcode 编译。
