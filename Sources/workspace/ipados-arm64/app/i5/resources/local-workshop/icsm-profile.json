@@ -1,0 +1,5 @@
+{
+  "version": "player-profile-v2",
+  "default_name": "玩家",
+  "avatar": "file://{images}/icons/ui/player.svg"
+}

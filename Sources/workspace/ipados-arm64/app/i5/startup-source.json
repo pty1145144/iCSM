@@ -1,0 +1,35 @@
+{
+  "display_name": "iCSM",
+  "signature": "iCSM由BILIBILI@SU_ZeShin个人移植，严禁用以商业用途",
+  "background": {
+    "original": "game-assets/csgo/panorama/videos/sirocco.webm",
+    "original_sha256": "0302afed94378df497a7f29b0b1d1337b58bd5c28cfbfba863aaf6c7017b8625",
+    "source_selection": "Original mainmenu.js _SetBackgroundMovie sets overrideMovie to sirocco.",
+    "extraction": [
+      "ffmpeg",
+      "-i",
+      "game-assets/csgo/panorama/videos/sirocco.webm",
+      "-frames:v",
+      "1",
+      "lobby-background.png"
+    ],
+    "asset": "Assets.xcassets/StartupBackground.imageset/lobby-background.png",
+    "asset_sha256": "9e6bec500c6480da4f111a0d0f2968cda794cb4ad3d8b82c3c43bd86adcd5b74",
+    "dimensions": [
+      1920,
+      1080
+    ]
+  },
+  "avatar": {
+    "original": "IMG_5291.JPG",
+    "original_sha256": "bfc2e9a493d542b49d73285e670d5a88c89934dda990bf85a5f363d2b83d8870",
+    "asset": "Assets.xcassets/AuthorAvatar.imageset/author-avatar.jpg",
+    "asset_sha256": "bfc2e9a493d542b49d73285e670d5a88c89934dda990bf85a5f363d2b83d8870",
+    "dimensions": [
+      512,
+      512
+    ],
+    "modifications": "none"
+  },
+  "coverage": "OS launch storyboard reused for resource validation and retained above SDL until original lobby UI and movie texture are ready, followed by later real Metal frames."
+}

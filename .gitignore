@@ -1,0 +1,19 @@
+# Local compilation and signing
+/Build/
+/config.local.json
+*.ipa
+*.mobileprovision
+*.p12
+*.pfx
+*.keychain
+*.keychain-db
+*.xcuserstate
+xcuserdata/
+.DS_Store
+__pycache__/
+*.pyc
+# Game data are imported separately
+/iCSM-Data.zip
+/game-assets/
+/runtime-i5/
+*.zip.partial

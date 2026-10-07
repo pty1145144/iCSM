@@ -1,0 +1,8 @@
+{
+  "version": "preset_v2_4x3",
+  "entries": {
+    "setting.defaultres": 1920,
+    "setting.defaultresheight": 1440,
+    "setting.aspectratiomode": 0
+  }
+}

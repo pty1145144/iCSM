@@ -1,0 +1,36 @@
+.icsm-profile
+{
+    horizontal-align: center;
+    vertical-align: top;
+    margin-top: 36px;
+    flow-children: right;
+    padding: 8px 12px;
+    background-color: #111111bb;
+}
+.icsm-profile-avatar
+{
+    width: 56px;
+    height: 56px;
+}
+.icsm-profile-name
+{
+    max-width: 500px;
+    text-overflow: ellipsis;
+    vertical-align: center;
+    margin-left: 14px;
+    font-family: Stratum2, 'Arial Unicode MS';
+    font-size: 24px;
+    color: white;
+}
+.icsm-profile-edit
+{
+    vertical-align: center;
+    margin-left: 20px;
+    font-family: 'Arial Unicode MS';
+    font-size: 22px;
+    color: #c5dff2;
+}
+.icsm-profile:hover
+{
+    background-color: #32465cdd;
+}

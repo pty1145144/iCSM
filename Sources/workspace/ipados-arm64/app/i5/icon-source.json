@@ -1,0 +1,14 @@
+{
+  "page": "https://www.steamgriddb.com/icon/42999",
+  "image": "https://cdn2.steamgriddb.com/icon/f9e2270a84c5a14c77836f5ed85d24a8.png",
+  "author": "Rayjax",
+  "dimensions": [
+    1024,
+    1024
+  ],
+  "format": "PNG",
+  "alpha": false,
+  "sha256": "d79c37a38ee1a5386437d91ab9f7c192475b1de7d16d3936fa726c504febb808",
+  "downloaded_utc": "2026-10-05",
+  "modifications": "none; Xcode generates smaller icon variants"
+}

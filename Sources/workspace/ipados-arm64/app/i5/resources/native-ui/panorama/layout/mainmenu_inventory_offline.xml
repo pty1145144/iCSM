@@ -1,0 +1,56 @@
+<root>
+    <styles>
+        <include src="file://{resources}/styles/csgostyles.css" />
+        <include src="file://{resources}/styles/mainmenu.css" />
+        <include src="file://{resources}/styles/inventory_offline.css" />
+    </styles>
+    <scripts>
+        <include src="file://{resources}/scripts/inventory_offline.js" />
+    </scripts>
+    <Panel class="mainmenu-content__container offline-inventory" useglobalcontext="true">
+        <Panel class="content-navbar">
+            <Button id="OfflineInventoryBack" class="offline-inventory-back" onactivate="OfflineInventory.Back();"><Label text="‹ 返回库存" /></Button>
+            <Label id="OfflineInventoryTitle" class="content-navbar__title" text="库存 · 离线装备" />
+            <Panel class="offline-inventory-pages">
+                <RadioButton id="OfflineInventoryWeaponsPage" group="OfflineInventoryPage" onactivate="OfflineInventory.SetPage('weapons');"><Label text="武器装备" /></RadioButton>
+                <RadioButton id="OfflineInventoryKnivesPage" group="OfflineInventoryPage" onactivate="OfflineInventory.SetPage('knives');"><Label text="刀具选择" /></RadioButton>
+            </Panel>
+        </Panel>
+        <Panel class="offline-inventory-tabs">
+            <RadioButton id="OfflineInventoryCT" group="OfflineInventoryTeam" onactivate="OfflineInventory.SetTeam(3);">
+                <Label text="反恐精英" />
+            </RadioButton>
+            <RadioButton id="OfflineInventoryT" group="OfflineInventoryTeam" onactivate="OfflineInventory.SetTeam(2);">
+                <Label text="恐怖分子" />
+            </RadioButton>
+        </Panel>
+        <Panel class="offline-inventory-tabs categories">
+            <RadioButton id="OfflineInventorySecondary" group="OfflineInventoryCategory" onactivate="OfflineInventory.SetCategory('secondary');"><Label text="手枪" /></RadioButton>
+            <RadioButton id="OfflineInventoryRifle" group="OfflineInventoryCategory" onactivate="OfflineInventory.SetCategory('rifle');"><Label text="步枪" /></RadioButton>
+            <RadioButton id="OfflineInventorySMG" group="OfflineInventoryCategory" onactivate="OfflineInventory.SetCategory('smg');"><Label text="微型冲锋枪" /></RadioButton>
+            <RadioButton id="OfflineInventoryHeavy" group="OfflineInventoryCategory" onactivate="OfflineInventory.SetCategory('heavy');"><Label text="重型武器" /></RadioButton>
+        </Panel>
+        <Label id="OfflineInventoryHint" class="offline-inventory-hint" text="点击武器进入皮肤选择页，选择后点击右下角确认。" />
+        <Panel id="OfflineSkinPage" class="offline-skin-page">
+            <Panel class="offline-skin-header">
+                <Image id="OfflineSkinWeaponImage" />
+                <Panel class="offline-skin-details">
+                    <Label id="OfflineSkinTeam" />
+                    <Label id="OfflineSkinSelectionName" />
+                </Panel>
+            </Panel>
+            <Label id="OfflineSkinHint" class="offline-inventory-hint" />
+            <Panel id="OfflineSkinChoices" class="offline-skin-choices" />
+            <Panel class="offline-skin-footer">
+                <Panel class="offline-skin-pagination">
+                    <Button id="OfflineSkinPrevious" onactivate="OfflineInventory.ChangeSkinPage(-1);"><Label text="‹ 上一页" /></Button>
+                    <Label id="OfflineSkinPageNumber" />
+                    <Button id="OfflineSkinNext" onactivate="OfflineInventory.ChangeSkinPage(1);"><Label text="下一页 ›" /></Button>
+                </Panel>
+                <Button id="OfflineSkinConfirm" class="offline-skin-confirm" onactivate="OfflineInventory.Confirm();"><Label text="确认并装备" /></Button>
+            </Panel>
+        </Panel>
+        <Panel id="OfflineInventoryItems" class="offline-inventory-items" />
+        <Label id="OfflineInventoryStatus" class="offline-inventory-status" text="离线装备 · 无需联网" />
+    </Panel>
+</root>

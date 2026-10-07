@@ -1,0 +1,22 @@
+.icsm-console-icon
+{
+    horizontal-align: center;
+    vertical-align: top;
+    margin-top: 14px;
+    font-family: 'Arial Unicode MS';
+    font-size: 34px;
+    color: white;
+}
+.icsm-console-title
+{
+    horizontal-align: center;
+    vertical-align: bottom;
+    margin-bottom: 14px;
+    font-family: 'Arial Unicode MS';
+    font-size: 20px;
+    color: white;
+}
+#MainMenuNavBarConsole:enabled:hover Label
+{
+    color: rgb(24, 24, 24);
+}
