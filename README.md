@@ -17,6 +17,8 @@
 下载本仓库，在仓库根目录运行：
 
 ```sh
+git clone https://github.com/zktfjcksxk-spec/iCSM.git
+cd iCSM
 ./icsm doctor
 ./icsm setup --team YOUR_TEAM_ID --bundle-id com.yourname.icsm --device YOUR_DEVICE_ID
 ./icsm build --jobs 6
