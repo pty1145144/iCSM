@@ -1,5 +1,7 @@
 # iCSM
 
+简体中文 | [English](README.en.md)
+
 由 **BILIBILI @SU_ZeShin** 个人移植的 CSGO 移动版，面向 **iPhone / iPad**，以 ARM64 原生运行并使用 Metal 渲染后端。游戏模块、SDL 和 Metal 后端均由源码构建。当前版本：**0.7.2（Build 86）**。
 
 ## 本移植新增功能
