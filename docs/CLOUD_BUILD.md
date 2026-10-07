@@ -2,7 +2,7 @@
 
 [English](CLOUD_BUILD.en.md) | 简体中文
 
-Windows 用户可以在 GitHub 上触发云端 ARM64 Mac 编译，下载 IPA，再在本机签名安装。此流程无需本地 Mac；云端使用 Xcode 27，从仓库源码编译全部 35 个原生框架。
+Windows 用户可以在 GitHub 上触发云端 ARM64 Mac 编译，下载 IPA，再在本机签名安装。此流程无需本地 Mac；云端使用 Xcode 27，从仓库源码编译全部 35 个原生框架。设备需要 **iOS / iPadOS 27.0 或更新版本**。
 
 ## 1. 在 GitHub 编译
 
@@ -43,5 +43,9 @@ python3 scripts/verify_ipa.py Build/iCSM-unsigned.ipa --unsigned --report Build/
 ```
 
 此模式不读取 `config.local.json`。使用 Xcode 本机签名的流程继续按[原 Mac 编译说明](BUILD.md)执行。
+
+## 云编译验收记录
+
+[首次完整云端运行](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37577652912)于 **2026 年 10 月 7 日**通过，使用 Xcode 27.0 / iPhoneOS SDK 27.0、两个并行编译任务。全部 **3,845 项原生构建任务**完成，IPA 导出、**35 个框架／36 个 ARM64 iOS 二进制**验收和产物上传全部成功，总耗时约 **35 分钟**。下载的 IPA 也已独立核对校验和、依赖和签名完整性。本次未测试 Windows 实机签名安装及游玩。
 
 返回[项目主页](https://github.com/zktfjcksxk-spec/iCSM#chinese)。

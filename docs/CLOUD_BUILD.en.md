@@ -2,7 +2,7 @@
 
 English | [简体中文](CLOUD_BUILD.md)
 
-Windows users can trigger a source build on a GitHub-hosted ARM64 Mac, download the IPA, and sign and install it locally. You do not need a local Mac for this workflow. The cloud build uses Xcode 27 and compiles all 35 native frameworks from this repository's sources.
+Windows users can trigger a source build on a GitHub-hosted ARM64 Mac, download the IPA, and sign and install it locally. You do not need a local Mac for this workflow. The cloud build uses Xcode 27 and compiles all 35 native frameworks from this repository's sources. The device must run **iOS / iPadOS 27.0 or later**.
 
 ## 1. Build on GitHub
 
@@ -43,5 +43,9 @@ python3 scripts/verify_ipa.py Build/iCSM-unsigned.ipa --unsigned --report Build/
 ```
 
 This mode does not read `config.local.json`. Local builds signed with Xcode continue to use the [existing Mac instructions](BUILD.en.md).
+
+## Validated cloud build
+
+[The first complete cloud run](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37577652912) passed on **October 7, 2026**, using Xcode 27.0 / iPhoneOS SDK 27.0 and two compiler jobs. It completed all **3,845 native build tasks**, exported the IPA, verified all **35 frameworks / 36 ARM64 iOS binaries**, and uploaded the artifact in approximately **35 minutes**. The downloaded IPA was independently checked for checksum, dependencies and signature integrity. Windows device signing and gameplay were not tested in this run.
 
 Return to the [project homepage](https://github.com/zktfjcksxk-spec/iCSM#english).
