@@ -30,6 +30,8 @@ cd iCSM
 
 ## 导入数据与首次启动
 
+**数据包下载：[iCSM-Data.zip（iCloud）](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**。下载后请保留文件名 `iCSM-Data.zip`，无需解压。
+
 应用与游戏数据分开提供。安装应用后，将配套 **`iCSM-Data.zip`** 导入 iCSM 的文件共享目录：
 
 - **macOS**：Finder → 设备 → 文件 → iCSM。

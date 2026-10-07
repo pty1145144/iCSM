@@ -6,7 +6,7 @@
 
 需要 macOS、带 iPhoneOS 27.x SDK 的 Xcode、Python 3 和网络（首次安装固定版本的 CMake / Ninja）。当前应用最低系统为 iOS / iPadOS 27.0。Windows 用于导入数据，不能直接运行 Xcode 编译。
 
-在 Xcode → Settings → Accounts 登录自己的 Apple 账户。连接、解锁设备，打开开发者模式。在终端进入本文件所在目录：
+在 Xcode → Settings → Accounts 登录自己的 Apple 账户。连接、解锁设备，打开开发者模式。在终端进入仓库根目录（`icsm` 所在目录）：
 
 ```sh
 ./icsm doctor
@@ -22,6 +22,8 @@
 IPA 中包含 ARM64 iOS 模块，不包含 macOS 游戏、不依赖 Rosetta 或运行时翻译。免费账户的签名有效期通常为 7 天，需要重新签名安装；以 Xcode 和设备实际返回的签名限制为准。首次安装若系统要求信任开发者证书，请在设置中完成。
 
 ## 2. 从 Mac / Windows 导入数据
+
+**数据包下载：[iCSM-Data.zip（iCloud）](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**。
 
 安装应用后可以先打开，会显示导入说明。将提供的文件保留为精确名称 `iCSM-Data.zip`，无需在电脑上解包，也无需复制到某个隐藏目录：
 
