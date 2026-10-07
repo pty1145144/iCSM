@@ -60,4 +60,4 @@ Tested devices are **iPhone 17 Pro Max and M5 iPad Pro**. Other models have not 
 
 Third-party copyright and license texts are retained. The resource pack contains the game assets and modifications used by this project; their use and distribution remain subject to the rights applicable to those resources.
 
-Return to the [English project overview](../README.en.md).
+Return to the [English project overview](https://github.com/zktfjcksxk-spec/iCSM#english).
