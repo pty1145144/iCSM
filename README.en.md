@@ -1,6 +1,6 @@
 # iCSM
 
-[简体中文](https://github.com/zktfjcksxk-spec/iCSM#chinese) | [English](https://github.com/zktfjcksxk-spec/iCSM#english)
+[English](https://github.com/zktfjcksxk-spec/iCSM#english) | [简体中文](https://github.com/zktfjcksxk-spec/iCSM#chinese)
 
 A personal CSGO port by **BILIBILI @SU_ZeShin** for **iPhone and iPad**, running natively on **ARM64** with a **Metal rendering backend**. The game modules, SDL, and Metal backend are built from source. Current version: **0.7.2 (Build 86)**.
 
