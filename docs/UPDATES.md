@@ -18,6 +18,8 @@ The minimum OS remains **iOS / iPadOS 27.0**, and the build requires the **iPhon
 
 Build instructions: [Mac](BUILD.en.md) · [Windows / GitHub Actions](CLOUD_BUILD.en.md).
 
+[The complete Build 149 cloud build](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37881597437) passed. The downloaded IPA also passed independent integrity, dependency and signature verification; see the [validation record](validation/build-149.json). The cloud artifact requires personal re-signing and has not been device-tested.
+
 ---
 
 <a name="chinese"></a>
@@ -39,3 +41,5 @@ Build instructions: [Mac](BUILD.en.md) · [Windows / GitHub Actions](CLOUD_BUILD
 最低系统仍为 **iOS / iPadOS 27.0**，编译需要 **iPhoneOS 27.x SDK**；本次没有加入 iOS 26 支持。游戏数据仍通过独立的 [iCloud 链接](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)提供。仓库包含移动端编译输入及应用资源，不包含完整地图／模型／贴图数据包和个人签名配置。
 
 编译说明：[Mac](BUILD.md) · [Windows / GitHub Actions](CLOUD_BUILD.md)。
+
+[Build 149 完整云编译](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37881597437)已通过，下载的 IPA 也通过独立完整性、依赖和签名检查，详见[验收记录](validation/build-149.json)。云端产物仍需个人签名，未进行设备测试。

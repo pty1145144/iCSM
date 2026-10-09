@@ -48,6 +48,8 @@ This mode does not read `config.local.json`. Local builds signed with Xcode cont
 
 ## Validated cloud build
 
+[The Build 149 cloud run](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37881597437) passed on **October 9, 2026**, from source commit `7594166`, using Xcode 27.0 / iPhoneOS SDK 27.0 and two compiler jobs. All **3,848 native build tasks**, IPA export, **35 frameworks / 36 ARM64 iOS binaries** and artifact upload passed in approximately **39 minutes**. The downloaded IPA was independently verified for SHA-256, ZIP CRC, runtime dependencies, memory entitlement and complete ad-hoc signature. See the [verification record](validation/build-149.json). This cloud artifact has not been installed or gameplay-tested on a device; sign it with your own account before installation.
+
 [The first complete cloud run](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37577652912) passed on **October 7, 2026**, using Xcode 27.0 / iPhoneOS SDK 27.0 and two compiler jobs. It completed all **3,845 native build tasks**, exported the IPA, verified all **35 frameworks / 36 ARM64 iOS binaries**, and uploaded the artifact in approximately **35 minutes**. The downloaded IPA was independently checked for checksum, dependencies and signature integrity. Windows device signing and gameplay were not tested in this run.
 
 Return to the [project homepage](https://github.com/zktfjcksxk-spec/iCSM#english).

@@ -1,0 +1,17 @@
+{
+  "ipa": "iCSM-unsigned.ipa",
+  "sha256": "957b9e1bfe54072d2f41df44f1230b2500c213993090d13a80854e8ee085be4a",
+  "bytes": 74565066,
+  "version": "0.7.2",
+  "build": "149",
+  "bundle_id": "com.icsm.client",
+  "frameworks": 35,
+  "verified_arm64_ios_binaries": 36,
+  "signing": "ad-hoc; personal re-signing required",
+  "source_commit": "759416656c803dd0154e718528a4b90b34d6521e",
+  "workflow_url": "https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37881597437",
+  "native_build_jobs": 3848,
+  "toolchain": "Xcode 27.0 / iPhoneOS SDK 27.0",
+  "downloaded_sha256_zip_crc_dependencies_entitlements_signature_verified": true,
+  "cloud_artifact_device_installation_and_gameplay_tested": false
+}

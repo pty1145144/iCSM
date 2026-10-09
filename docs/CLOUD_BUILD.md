@@ -48,6 +48,8 @@ python3 scripts/verify_ipa.py Build/iCSM-unsigned.ipa --unsigned --report Build/
 
 ## 云编译验收记录
 
+[Build 149 完整云端运行](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37881597437)于 **2026 年 10 月 9 日**通过，对应源码提交 `7594166`，使用 Xcode 27.0 / iPhoneOS SDK 27.0、两个并行编译任务。全部 **3,848 项原生构建任务**、IPA 导出、**35 个框架／36 个 ARM64 iOS 二进制**验收和产物上传通过，总耗时约 **39 分钟**。下载后的 IPA 已独立核对 SHA-256、ZIP CRC、动态库依赖、内存权限和完整的 ad-hoc 签名，详见[验收记录](validation/build-149.json)。本次云端产物尚未进行设备安装和游玩测试；安装前须使用自己的账户签名。
+
 [首次完整云端运行](https://github.com/zktfjcksxk-spec/iCSM/actions/runs/37577652912)于 **2026 年 10 月 7 日**通过，使用 Xcode 27.0 / iPhoneOS SDK 27.0、两个并行编译任务。全部 **3,845 项原生构建任务**完成，IPA 导出、**35 个框架／36 个 ARM64 iOS 二进制**验收和产物上传全部成功，总耗时约 **35 分钟**。下载的 IPA 也已独立核对校验和、依赖和签名完整性。本次未测试 Windows 实机签名安装及游玩。
 
 返回[项目主页](https://github.com/zktfjcksxk-spec/iCSM#chinese)。
