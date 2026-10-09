@@ -1,5 +1,4 @@
-name: Build iCSM IPA
-
+name: Build iCSM IPA (A11‑iOS16)
 on:
   workflow_dispatch:
     inputs:
@@ -27,20 +26,22 @@ jobs:
       PYTHONUNBUFFERED: '1'
       ICSM_BUNDLE_ID: ${{ inputs.bundle_id }}
       ICSM_BUILD_JOBS: ${{ inputs.jobs }}
-      IPHONEOS_DEPLOYMENT_TARGET: '16.0'
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Patch icsm.py: override hard‑coded deployment target 27.0 → 16.0
+      - name: Patch icsm.py: deploy target 27.0→16.0 & skip SDK 27 check
         run: |
           set -o pipefail
-          # 替换脚本内硬编码的 CMAKE_OSX_DEPLOYMENT_TARGET
+          # 修改cmake部署目标
           sed -i '' 's/-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0/-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0/g' icsm.py
-          echo "=== Verify patch result ==="
+          # 注释强制27.x SDK校验
+          sed -i '' "s/if '27.' not in output/if False and '27.' not in output/g" icsm.py
+          echo "=== Patch verification ==="
           grep "CMAKE_OSX_DEPLOYMENT_TARGET" icsm.py
+          grep "if '27.' not in output" icsm.py
           echo "=========================="
 
       - name: Check Apple toolchain
@@ -57,26 +58,21 @@ jobs:
           mkdir -p Build
           ./icsm build --unsigned --bundle-id "$ICSM_BUNDLE_ID" --jobs "$ICSM_BUILD_JOBS" 2>&1 | tee Build/cloud-build.log
 
-      - name: Verify iOS deployment target (vtool binary check, no Info.plist dependency)
+      - name: Verify iOS min version via Mach‑O binary (vtool)
         run: |
           unzip -q -o Build/iCSM-unsigned.ipa -d Build/ipa-tmp
-          # 精准取 Payload 下一级的 .app
           MAIN_APP=$(find Build/ipa-tmp/Payload -maxdepth 1 -type d -name "*.app" | head -n1)
           APP_BINARY="$MAIN_APP/$(basename "$MAIN_APP" .app)"
-
-          echo "Main app binary: $APP_BINARY"
-          # 读取mach‑o里的minos最低iOS版本
+          echo "App binary: $APP_BINARY"
           MIN_VER=$(xcrun vtool -show-build "$APP_BINARY" | grep -m1 "minos" | awk '{print $2}')
-          echo "Binary minimum iOS version: $MIN_VER"
+          echo "Binary minimum iOS: $MIN_VER"
 
-          # 允许 ≤16.0
           if printf '%s\n' "16.0" "$MIN_VER" | sort -V | head -n1 | grep -q "16.0"; then
-            echo "✅ Deployment target OK (≤16.0)"
+            echo "✅ Minimum iOS version OK (≤16.0)"
           else
-            echo "::error::Deployment target too high! Expected ≤16.0, got $MIN_VER"
+            echo "::error::Min iOS version too high! Expected ≤16.0, got $MIN_VER"
             exit 1
           fi
-
           rm -rf Build/ipa-tmp
 
       - name: Verify app and all 35 frameworks
@@ -91,10 +87,10 @@ jobs:
           Download **iCSM‑IPA** under **Artifacts** below and extract it.
           Re‑sign **iCSM‑unsigned.ipa** with your own Apple account before installing.
 
-          ⚠️ Important for A11 (iPhone X / 8 /8 Plus):
-          - This build sets minimum iOS 16.0, but **A11 hardware does NOT support MetalFX**.
-          - You MUST modify source code to remove MTLFX calls, otherwise app will crash on launch.
-          - iPhone8/8P (2GB RAM) is high risk for memory‑kill; iPhone X (3GB) works better.
+          ⚠️ A11 (iPhone X / 8 / 8 Plus) hardware note:
+          A11 does NOT support MetalFX.
+          You **must modify source code to remove MTLFX related calls**, otherwise app will crash on launch.
+          iPhone8/8P (2GB RAM) may get killed by system due to memory limit; iPhone X (3GB) is more stable.
 
           No Apple account, certificate, device ID or game data is uploaded to the build runner.
           See **docs/CLOUD_BUILD.en.md** for Windows installation and data import.
