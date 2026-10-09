@@ -1,0 +1,67 @@
+{
+  "vpk_index_sha256": "31ecbe871348242e56a8d387f8661274823efcb8bcc4afd9403530e842cc200a",
+  "icons": [
+    {
+      "name": "home",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/csgologo.svg",
+      "svg_sha256": "999efc32fb4feba4cd8d3b283f1b3a30576c27bf1ab330097b89a32a2600b330",
+      "png_sha256": "7f33faef3892b614329635d5b0d0f4995ce6b7672c1a96ae8370c23d04c27130"
+    },
+    {
+      "name": "play",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/play_circle.svg",
+      "svg_sha256": "e9440e64e11645923eba4ba7e1a1560d57e150edb86297fbf3360087a46d1198",
+      "png_sha256": "61876ddfeb4913b0ff4c6384ac09caa296b101ee3e352075074380dca08ac26a"
+    },
+    {
+      "name": "inventory",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/inventory.svg",
+      "svg_sha256": "424ef1555edec537a760437d12bb7dd24169433a4a55bbb7db4c6aee0c96b014",
+      "png_sha256": "aeaa6ab0ab1ddec676f89e4db3ecbf55f7baccdbc9aa45a88edd5f00258f19ef"
+    },
+    {
+      "name": "settings",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/settings.svg",
+      "svg_sha256": "4919eaeafcfc57e88ad4d886ff6c67f7f8dc147fc2b670fa1366bf4989d23b18",
+      "png_sha256": "5b97977ec58ca25d376cecba30be5c0bb58e9a833e38432989a4755e4afc212f"
+    },
+    {
+      "name": "console",
+      "source": "ipados-arm64/app/i5/resources/native-ui/materials/panorama/images/icons/ui/icsm_console.svg",
+      "svg_sha256": "1a4ec760c70b0510b8d067085932a88bd26a5acf6e0e5c06150677e3709608dd",
+      "png_sha256": "cefff73d17cafbe199c737b14f6a59de6b622f5f8a5dad4382bd8d733958aa5e"
+    },
+    {
+      "name": "rooms",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/servers.svg",
+      "svg_sha256": "724d235c66c79c9d61fd574930856e16d9e05742b7e04abc0ac72ed23bccc00c",
+      "png_sha256": "51c58fd023aea2ad0e268f0a62384b0b1942559da7f9d7479f98cf58c971930a"
+    },
+    {
+      "name": "fps",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/graph.svg",
+      "svg_sha256": "8b780ec34e432c8ac24e3d741c63b2ce4548c7399e79fe9c3cec4161e56eb62c",
+      "png_sha256": "db5e087b72a53490ca40476ddfab9fd7591b742d6995db2335db11f34be1c7dc"
+    },
+    {
+      "name": "quit",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/power.svg",
+      "svg_sha256": "c0499b3f6b742809d30d394fb21650a7176d0f1564a82884dc6aa0d66742f3dc",
+      "png_sha256": "3a97e3d8f55711f2237b8df126518dd1938e8caaa5f1cf54beb65c711fe31b32"
+    },
+    {
+      "name": "profile-avatar",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/player.svg",
+      "svg_sha256": "36d623257e343035e6ac50f5ce8a900e5400ba01ff9578a2b52de393529dc47c",
+      "crc32": "f2e4c002",
+      "png_sha256": "03b797ae42df11dcfc85fb97884a00665bf015459f66a7e6a23322468b842ae2"
+    },
+    {
+      "name": "profile-edit",
+      "source": "pak01.vpk:materials/panorama/images/icons/ui/edit.svg",
+      "svg_sha256": "5684c9799ecb6147665edc0b19c264f1c89c0492cea2bff6c3514f809bf9056a",
+      "crc32": "9ce7aea7",
+      "png_sha256": "52f0c52c667ab2c0c8839516f323a858614b5799cc00cde684f5504cf3b3d58a"
+    }
+  ]
+}

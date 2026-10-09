@@ -1,14 +1,19 @@
 {
-  "page": "https://www.steamgriddb.com/icon/42999",
-  "image": "https://cdn2.steamgriddb.com/icon/f9e2270a84c5a14c77836f5ed85d24a8.png",
-  "author": "Rayjax",
+  "design": "iCSM: clean light-gray background, dark-gray frosted CS:GO silhouette, Apple pendant suspended from rifle barrel",
+  "generation_tool": "built-in imagegen",
+  "source_artwork": "output/icons/icsm-apple-pendant-v5.png",
+  "prompt": "output/icons/icsm-apple-pendant-v5-prompt.txt",
+  "reference_original": {
+    "page": "https://www.steamgriddb.com/icon/42999",
+    "author": "Rayjax"
+  },
   "dimensions": [
     1024,
     1024
   ],
   "format": "PNG",
   "alpha": false,
-  "sha256": "d79c37a38ee1a5386437d91ab9f7c192475b1de7d16d3936fa726c504febb808",
-  "downloaded_utc": "2026-10-05",
-  "modifications": "none; Xcode generates smaller icon variants"
+  "sha256": "2bd699ad061011ae86b76a5d0f3af3d105e1d56d16e5ca30491de06078584cae",
+  "modifications": "Final user-approved artwork resampled to iOS 1024px app-icon master; Xcode generates device variants",
+  "app_build": "138"
 }

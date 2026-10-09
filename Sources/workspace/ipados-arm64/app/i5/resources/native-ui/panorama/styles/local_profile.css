@@ -1,8 +1,11 @@
 .icsm-profile
 {
+    width: 400px;
+    height: 80px;
     horizontal-align: center;
-    vertical-align: top;
-    margin-top: 36px;
+    vertical-align: bottom;
+    margin-top: 0px;
+    margin-bottom: 72px;
     flow-children: right;
     padding: 8px 12px;
     background-color: #111111bb;
@@ -14,7 +17,9 @@
 }
 .icsm-profile-name
 {
-    max-width: 500px;
+    width: 260px;
+    height: 36px;
+    max-width: 260px;
     text-overflow: ellipsis;
     vertical-align: center;
     margin-left: 14px;
@@ -24,13 +29,17 @@
 }
 .icsm-profile-edit
 {
+    width: 28px;
+    height: 28px;
     vertical-align: center;
-    margin-left: 20px;
-    font-family: 'Arial Unicode MS';
-    font-size: 22px;
-    color: #c5dff2;
+    margin-left: 16px;
 }
 .icsm-profile:hover
 {
     background-color: #32465cdd;
+}
+.icsm-native-glass-profile .icsm-profile
+{
+    /* Native glass owns drawing/input; preserve the authoritative layout. */
+    opacity: 0;
 }

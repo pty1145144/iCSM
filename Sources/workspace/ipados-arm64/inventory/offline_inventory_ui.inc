@@ -58,6 +58,15 @@ public:
     {
         return ICSMSkin::Read(team, definition).paint;
     }
+    bool SaveSkin(int team, int definition, int paint)
+    {
+        const ICSMSkin::Selection skin = ICSMSkin::Trial(definition, paint);
+        if (!ICSMSkin::Save(team, definition, skin)) return false;
+        icsmNetworkInventory.Changed();
+        Msg("ICSM_SKIN_SELECTED team=%d definition=%d paint=%d shared=%d\n",
+            team, definition, paint, ICSMSkin::SharedGun(definition));
+        return true;
+    }
     bool EquipSkin(int team, int definition, int paint)
     {
         const GameItemDefinition_t *item = ICSMSkin::Definition(team, definition);
@@ -140,6 +149,21 @@ public:
             CreateJSOEntry_String(item, "name", def->GetItemBaseName());
             CreateJSOEntry_String(item, "image", def->GetInventoryImage());
             CreateJSOEntry_String(item, "category", GetItemSchema()->GetLoadoutStrings()[slot]);
+            // Classification comes from the original item schema, rather
+            // than guessed lists of definition IDs in the mobile UI.
+            const char *kind = "other";
+            switch (def->GetWeaponTypeString() ? WeaponClassFromString(def->GetWeaponTypeString()) : WEAPONTYPE_UNKNOWN)
+            {
+            case WEAPONTYPE_KNIFE: kind = "melee"; break;
+            case WEAPONTYPE_PISTOL: kind = "secondary"; break;
+            case WEAPONTYPE_SUBMACHINEGUN: kind = "smg"; break;
+            case WEAPONTYPE_RIFLE: kind = "rifle"; break;
+            case WEAPONTYPE_SNIPER_RIFLE: kind = "sniper"; break;
+            case WEAPONTYPE_SHOTGUN: kind = "shotgun"; break;
+            case WEAPONTYPE_MACHINEGUN: kind = "machinegun"; break;
+            default: break;
+            }
+            CreateJSOEntry_String(item, "kind", kind);
             const ICSMSkin::Selection skin = ICSMSkin::Read(team, index);
             CreateJSOEntry_Number(item, "paint", skin.paint);
             AddPreview(item, index, skin.paint);
@@ -155,6 +179,7 @@ public:
 
 PANORAMA_COMPONENT_API_DEF_BEGIN(CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_API_DEF(int, GetSkin, CNativeOfflineInventory)
+    PANORAMA_COMPONENT_FUNCTION_API_DEF(bool, SaveSkin, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_API_DEF(bool, EquipSkin, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_RAW_API_DEF(void, GetSkins, CNativeOfflineInventory)
     PANORAMA_COMPONENT_FUNCTION_RAW_API_DEF(void, GetInventory, CNativeOfflineInventory)
@@ -232,6 +257,19 @@ CON_COMMAND_F(icsm_skin, "Equip local paint: icsm_skin <team> <definition> <pain
     {
         CNativeOfflineInventory api;
         Msg("ICSM_SKIN_SAVE_RESULT result=%d\n", api.EquipSkin(atoi(args[1]), atoi(args[2]), atoi(args[3])));
+    }
+}
+
+CON_COMMAND_F(icsm_skin_selection_state, "Inspect saved recipes and schema eligibility for one definition", FCVAR_DONTRECORD)
+{
+    if (args.ArgC() != 2) return;
+    const int definition = atoi(args[1]);
+    for (int team = TEAM_TERRORIST; team <= TEAM_CT; ++team)
+    {
+        const ICSMSkin::Selection skin = ICSMSkin::Read(team, definition);
+        Msg("ICSM_SKIN_SELECTION team=%d definition=%d eligible=%d shared=%d paint=%d seed=%d wear=%.6f\n",
+            team, definition, ICSMSkin::Definition(team, definition) != NULL,
+            ICSMSkin::SharedGun(definition), skin.paint, skin.seed, skin.wear);
     }
 }
 

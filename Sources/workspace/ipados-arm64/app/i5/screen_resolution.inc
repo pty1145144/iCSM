@@ -95,6 +95,19 @@ static void updateScreenPolicy(void (*queue)(const char*),NSDictionary *gpu,UIWi
    saveScreenPolicy();
   }
  }
+ // After client configuration is synchronized, the four quality presets own
+ // render dimensions. Legacy automatic sizing must not override a saved tier
+ // on the next launch. Fresh-install initialization above still runs once.
+ void *qualityClient=dlopen([[NSBundle.mainBundle.privateFrameworksPath stringByAppendingPathComponent:@"client_panorama.framework/client_panorama"] fileSystemRepresentation],RTLD_NOLOAD|RTLD_NOW);
+ auto qualityOwns=qualityClient?(bool(*)())dlsym(qualityClient,"SourceTouchQualityManagesResolution"):nullptr;
+ BOOL managed=qualityOwns && qualityOwns();
+ if(qualityClient)dlclose(qualityClient);
+ if(managed) {
+  if([screenPolicy[@"automatic"] boolValue]){screenPolicy[@"automatic"]=@NO;saveScreenPolicy();}
+  screenResolutionPending=NO;
+  if(requested)queue("icsm_apply_quality_preset\n");
+  return;
+ }
  unsigned width=[gpu[@"width"] unsignedIntValue],height=[gpu[@"height"] unsignedIntValue];
  if(screenResolutionPending && width==[screenPolicy[@"width"] unsignedIntValue] && height==[screenPolicy[@"height"] unsignedIntValue])screenResolutionPending=NO;
  if(!requested && [screenPolicy[@"automatic"] boolValue] && !screenResolutionPending &&

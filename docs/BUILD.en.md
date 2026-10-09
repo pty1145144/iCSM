@@ -2,7 +2,7 @@
 
 [简体中文](BUILD.md) | English
 
-This source kit targets iPhone and iPad. The native Source game modules, SDL, and Metal backend are compiled locally from source. It does not include precompiled game frameworks, the author's signing credentials, account settings, or device configuration. Third-party static dependencies such as V8 and font/video libraries, along with generated protocol headers, are provided. Maps, materials, skin previews, and offline shader libraries are supplied separately in `iCSM-Data.zip`.
+This source kit targets iPhone and iPad. The native Source game modules, SDL, and Metal backend are compiled locally from source. It does not include precompiled game frameworks, the author's signing credentials, account settings, or device configuration. Third-party static dependencies such as V8 and font/video libraries, along with generated protocol headers, are provided. Maps, materials, skin previews, and offline shader libraries are supplied separately in `iCSM-v1.zip`.
 
 ## Windows / browser-based builds
 
@@ -31,18 +31,22 @@ The IPA contains ARM64 iOS modules and does not depend on Rosetta or runtime CPU
 
 ## 2. Import data from macOS or Windows
 
-**Game data download: [iCSM-Data.zip (iCloud)](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**.
+**Direct import on iPhone / iPad (Build 149):** download the matching ZIP to Files, then tap **“选择数据包 ZIP” (Select Data ZIP)** at the top left of the initial screen. Choose the ZIP from On My iPhone / iPad or iCloud Drive. No extraction or manual move into the app directory is needed; renamed downloads are accepted, while the resource manifest is still strictly validated. Keep the app in the foreground while reading and extracting cloud files. The original ZIP is preserved and can be deleted by the user afterward.
 
-You can open the installed app before importing data; it will show the import instructions. Keep the filename exactly `iCSM-Data.zip`. Do not extract the archive on your computer.
+**Computer file sharing:**
 
-- **Mac**: Finder → connected device → Files → iCSM. Drag `iCSM-Data.zip` into iCSM.
-- **Windows**: Apple Devices → connected device → Files → iCSM → Add File. Select `iCSM-Data.zip`.
+**Game data download: [iCSM-v1.zip (iCloud)](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**.
+
+You can open the installed app before importing data; it will show the import instructions. Keep the filename exactly `iCSM-v1.zip`. Do not extract the archive on your computer.
+
+- **Mac**: Finder → connected device → Files → iCSM. Drag `iCSM-v1.zip` into iCSM.
+- **Windows**: Apple Devices → connected device → Files → iCSM → Add File. Select `iCSM-v1.zip`.
 
 Leave the app on its import screen while copying. **Wait for the computer to confirm that the transfer has finished**, then tap **“检查并导入” (Check and Import)** in the app. Do not replace game data during a match. Alternatively, use the iOS Files app to place the archive in **On My iPhone / iPad → iCSM**.
 
 The extracted data occupies approximately **19.65 GB**. The initial import temporarily needs space for both the archive and extracted files, plus caches; allow at least **35 GB of free space** before transferring. The app checks the available space. It validates files using SHA-256, ZIP CRC, and path checks before committing them individually. If import fails or is interrupted, the app displays the reason and retains already verified files for the next attempt. Use the data pack that matches this release's resource manifest.
 
-After a successful import, the app deletes the imported ZIP automatically. **Do not delete `game-assets` or `runtime-i5`.** The `runtime-i5` folder visible through file sharing holds personal configuration and saved data and does not need to be imported again.
+After a successful Check and Import from the app's file-sharing directory, the app deletes that ZIP automatically. Select Data ZIP preserves the selected source file. **Do not delete `game-assets` or `runtime-i5`.** The `runtime-i5` folder visible through file sharing holds personal configuration and saved data and does not need to be imported again.
 
 Apple's file-sharing instructions: [Finder on Mac](https://support.apple.com/en-us/119585) and [Apple Devices on Windows](https://support.apple.com/en-us/120402). The separate app/data workflow and import recovery design reference [brolnickij/emu](https://github.com/brolnickij/emu).
 
@@ -52,9 +56,11 @@ Startup proceeds through resource validation/import, initial Metal shader prepar
 
 Shader libraries and render pipelines are different. New combinations of maps, materials, and skins may still create pipelines on first use. The app retains its device-specific pipeline caching and recording mechanisms. GPU pipeline binaries are not copied between different device models, and first-use compilation may still occur.
 
-A fresh installation applies the author's current iPhone graphics preset: 1920×1080 output, 60 FPS base rendering, frame interpolation and MetalFX spatial upscaling enabled, a 60.384754% scene render scale, low model/effect detail, medium texture detail, low shadows, 2× texture filtering, and anti-aliasing, VSync, and motion blur disabled. Skin lighting and skin texture detail default to high. Players can change the settings in the game; restarting or updating does not repeatedly overwrite them. Fullscreen remains enforced.
+Build 149 defaults to the medium preset using the measured iPhone optimization profile: approximately 1.7 million scene pixels with aspect-ratio adaptation (1920×884 on iPhone 17 Pro Max, 1504×1128 on a 4:3 iPad), 100% scene scale, a 120 FPS limit, and frame interpolation and spatial upscaling disabled by default. Base map textures are preserved, distant shadow coverage is reduced to 65%, ordinary map bump lighting is simplified, and texture filtering uses 4×. Skin lighting and texture detail default to the highest setting. FPS, frame interpolation, motion blur, and weapon quality remain individually selectable; the remaining settings are managed by the very low / low / medium / high presets. Existing settings are preserved across updates and fullscreen is enforced.
 
-The player avatar uses the original CSGO default icon, and the initial name is **“玩家” (Player)**. Tap the name or **“修改昵称” (Change Name)** at the top of the main menu to open the system keyboard, then choose **“保存” (Save)**. The name persists across restarts and updates. Chinese names are supported; names must be nonempty and no longer than 127 UTF-8 bytes. The old fixed author name is migrated to “玩家” during an update.
+The avatar uses the default CSGO icon and the initial nickname is **icsmer**. Tap the name bar at the bottom center of the main menu to open the system keyboard and save a new name. Names persist across restarts and updates; they must be nonempty and no longer than 127 UTF-8 bytes.
+
+After startup resources and the main menu are ready, an announcement is shown for at least 20 foreground seconds before the lobby opens.
 
 Tested devices are **iPhone 17 Pro Max and M5 iPad Pro**. Other models have not undergone full compatibility, memory-use, or frame-rate testing. 120 Hz output, frame interpolation support, and performance depend on the actual device.
 
@@ -65,3 +71,11 @@ Tested devices are **iPhone 17 Pro Max and M5 iPad Pro**. Other models have not 
 Third-party copyright and license texts are retained. The resource pack contains the game assets and modifications used by this project; their use and distribution remain subject to the rights applicable to those resources.
 
 Return to the [English project overview](https://github.com/zktfjcksxk-spec/iCSM#english).
+
+## 5. Export error logs
+
+On the initial loading/import page, **“导出报错日志” (Export Error Logs)** is always available at the top right, even before any data is imported. In the game, use Settings → Game Settings → Game → Error Logs → Export Error Logs. Save or share the ZIP with the system share sheet; the app also stores up to three exports in Documents/Diagnostics.
+
+Exports include the current and two previous startup sessions, device/system/app versions, startup errors, renderer state, and import-diagnostics.json. Import diagnostics identify the failing stage and file, package size, available and required space, missing assets, ZIP errors, CRC/SHA-256 mismatches, file-provider errors, and underlying Metal shader errors. Each text log is bounded to its last 2 MiB. Configuration, saves, game assets and command mailboxes are excluded; common password commands are filtered. Logs can still contain player/server details, so inspect them before sharing.
+
+After a crash, reopen the app and export promptly. System crash diagnostics supplied by MetricKit are included when delivered; a ZIP does not necessarily contain a complete crash stack.

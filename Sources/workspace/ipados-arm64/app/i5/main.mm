@@ -1,8 +1,12 @@
 #import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <CoreText/CoreText.h>
 #import <CommonCrypto/CommonDigest.h>
 #import <Network/Network.h>
 #import "data_install.h"
+#import "diagnostics_export.h"
+#import <MetricKit/MetricKit.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include "../../touch/player_name.h"
 #include <dlfcn.h>
 #include <unistd.h>
@@ -12,6 +16,8 @@
 #include <vector>
 #include <string>
 #include <atomic>
+#include <algorithm>
+#include <cmath>
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <net/if.h>
@@ -84,7 +90,13 @@ static BOOL applyLocalProfile(NSString *cfg){
  NSString *path=[cfg stringByAppendingPathComponent:@"config.cfg"],*old=[NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
  if(!old && [[NSFileManager defaultManager] fileExistsAtPath:path]){printf("ICSM_PROFILE unreadable_config\n");return NO;}
  old=old?:@"";
+ // This request is placed only on the author's two devices for the release
+ // reset. Changing the bundle default never wipes another player's nickname.
+ NSString *reset=[evidence stringByAppendingPathComponent:@"reset-player-name.request"];
+ BOOL resetRequested=[NSFileManager.defaultManager fileExistsAtPath:reset];
+ if(resetRequested)[NSUserDefaults.standardUserDefaults removeObjectForKey:ICSMPlayerNamePreference];
  NSString *nickname=ICSMValidatedPlayerName([NSUserDefaults.standardUserDefaults stringForKey:ICSMPlayerNamePreference]);
+ if(resetRequested)nickname=defaultName;
  if(!nickname){
   NSRegularExpression *quotedName=[NSRegularExpression regularExpressionWithPattern:@"(?m)^name[ \\t]+\"([^\"\\r\\n]*)\"" options:0 error:nil];
   NSTextCheckingResult *match=[quotedName firstMatchInString:old options:0 range:NSMakeRange(0,old.length)];
@@ -99,14 +111,19 @@ static BOOL applyLocalProfile(NSString *cfg){
  NSString *updated=[nameLine stringByReplacingMatchesInString:old options:0 range:NSMakeRange(0,old.length) withTemplate:[NSRegularExpression escapedTemplateForString:replacement]];
  if(![nameLine numberOfMatchesInString:old options:0 range:NSMakeRange(0,old.length)])updated=[old stringByAppendingFormat:@"\n%@\n",replacement];
  NSString *backup=[evidence stringByAppendingPathComponent:[NSString stringWithFormat:@"config-before-profile-%@.cfg",version]];
- if(![[NSFileManager defaultManager] fileExistsAtPath:backup])writeText(backup,old);
+ if(!resetRequested && ![[NSFileManager defaultManager] fileExistsAtPath:backup])writeText(backup,old);
  if(![old isEqualToString:updated])writeText(path,updated);writeText(marker,version);
+ if(resetRequested){
+  for(NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:evidence error:nil])
+   if([file hasPrefix:@"config-before-profile-"] && [file hasSuffix:@".cfg"])
+    [NSFileManager.defaultManager removeItemAtPath:[evidence stringByAppendingPathComponent:file] error:nil];
+  [NSFileManager.defaultManager removeItemAtPath:reset error:nil];
+  printf("ICSM_PROFILE author_device_name_reset=1\n");
+ }
  printf("ICSM_PROFILE user_name_ready version=%s\n",version.UTF8String);
  return YES;
 }
 static BOOL prepareGame(){@autoreleasepool{
- FILE *f=freopen([[evidence stringByAppendingPathComponent:@"client.log"] fileSystemRepresentation],"w",stdout);if(!f)abort();dup2(fileno(stdout),STDERR_FILENO);setvbuf(stdout,nullptr,_IOLBF,0);setvbuf(stderr,nullptr,_IOLBF,0);
- printf("I5_START pid=%d executable=%s\n",getpid(),NSBundle.mainBundle.executablePath.UTF8String);
  NSString *assets=[root stringByAppendingPathComponent:@"game-assets"];
  printf("I5_ASSETS distribution_installation_verified\n");
  runtime=[root stringByAppendingPathComponent:@"runtime-i5"];NSString *game=[runtime stringByAppendingPathComponent:@"csgo"],*cfg=[game stringByAppendingPathComponent:@"cfg"],*fontdir=[game stringByAppendingPathComponent:@"panorama/fonts"];
@@ -129,7 +146,8 @@ static BOOL prepareGame(){@autoreleasepool{
   }
  }
  NSString *workshop=[assets stringByAppendingPathComponent:@"icsm-addon"];
- writeText([game stringByAppendingPathComponent:@"gameinfo.txt"],[NSString stringWithFormat:@"\"GameInfo\" { game \"Counter-Strike: Global Offensive\" type multiplayer_only bots 1 FileSystem { SteamAppId 730 SearchPaths { Game |gameinfo_path|. Game \"%@\" Mod \"%@\" Game \"%@/csgo\" Mod \"%@/csgo\" Platform \"%@/platform\" Game \"%@/platform\" UsrLocal |gameinfo_path|. } } }\n",workshop,workshop,assets,assets,assets,assets]);
+ NSString *skinTrial=[NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"printstream-trial"];
+ writeText([game stringByAppendingPathComponent:@"gameinfo.txt"],[NSString stringWithFormat:@"\"GameInfo\" { game \"Counter-Strike: Global Offensive\" type multiplayer_only bots 1 FileSystem { SteamAppId 730 SearchPaths { Game |gameinfo_path|. Game \"%@\" Mod \"%@\" Game \"%@\" Mod \"%@\" Game \"%@/csgo\" Mod \"%@/csgo\" Platform \"%@/platform\" Game \"%@/platform\" UsrLocal |gameinfo_path|. } } }\n",skinTrial,skinTrial,workshop,workshop,assets,assets,assets,assets]);
  NSData *steam=[NSData dataWithContentsOfFile:[assets stringByAppendingPathComponent:@"csgo/steam.inf"]];if(![steam writeToFile:[game stringByAppendingPathComponent:@"steam.inf"] atomically:YES])abort();
  // Aim Botz sets these non-cheat convars globally. The original mode configs
  // do not restore them, leaving the next match restricted to human T / bot CT.
@@ -164,7 +182,32 @@ static void runClient(){@autoreleasepool{
  std::vector<std::string> args={std::string(runtime.UTF8String)+"/csgo_client","-basedir",runtime.UTF8String,"-game","csgo","-fullscreen","-insecure","-nohltv","-nomaster","-nobreakpad","-novid","-panorama","-language","schinese","-panorama_native_overlay",[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"native-ui"].UTF8String,"+mat_queue_mode","0","+con_enable","1","+exec","i5_bindings.cfg"};std::vector<char*> argv;for(auto &a:args)argv.push_back(&a[0]);argv.push_back(nullptr);
  printf("I5_LAUNCHER_ENTRY pid=%d main_thread=%d drawable_pixel_size=%.0fx%.0f video_mode=saved_config argc=%zu\n",getpid(),NSThread.isMainThread,size.width*scale,size.height*scale,args.size());result=entry((int)args.size(),argv.data());printf("I5_RETURN result=%d pid=%d\n",result.load(),getpid());
 }}
-static NSDictionary *loadedImages(){NSMutableDictionary *rows=[NSMutableDictionary dictionary];for(uint32_t i=0;i<_dyld_image_count();++i){const char *path=_dyld_get_image_name(i);if(!path || !strstr(path,"CSGOI5Client.app/"))continue;const mach_header_64 *h=(const mach_header_64*)_dyld_get_image_header(i);unsigned platform=0;const uint8_t *p=(const uint8_t*)(h+1);for(uint32_t n=0;n<h->ncmds;++n){auto lc=(const load_command*)p;if(lc->cmd==LC_BUILD_VERSION)platform=((const build_version_command*)lc)->platform;p+=lc->cmdsize;}rows[@(path)]=@{@"cpu_type":@(h->cputype),@"platform":@(platform)};}return rows;}
+static NSDictionary *loadedImages(){
+ static NSDictionary *cached=nil;static uint32_t observed=0;uint32_t count=_dyld_image_count();
+ if(cached && observed==count)return cached;
+ NSMutableDictionary *rows=[NSMutableDictionary dictionary];
+ for(uint32_t i=0;i<count;++i){const char *path=_dyld_get_image_name(i);if(!path || !strstr(path,"CSGOI5Client.app/"))continue;const mach_header_64 *h=(const mach_header_64*)_dyld_get_image_header(i);unsigned platform=0;const uint8_t *p=(const uint8_t*)(h+1);for(uint32_t n=0;n<h->ncmds;++n){auto lc=(const load_command*)p;if(lc->cmd==LC_BUILD_VERSION)platform=((const build_version_command*)lc)->platform;p+=lc->cmdsize;}rows[@(path)]=@{@"cpu_type":@(h->cputype),@"platform":@(platform)};}
+ observed=count;cached=[rows copy];return cached;
+}
+// Source and UIKit snapshots must be read on their owning main thread. Freeze
+// nested mutable containers before dispatching JSON encoding and atomic disk
+// writes; the worker never traverses live engine objects or UIKit views.
+static id frozenStatusValue(id value) {
+ if([value isKindOfClass:NSDictionary.class]){
+  NSMutableDictionary *copy=[NSMutableDictionary dictionaryWithCapacity:[value count]];
+  for(id key in value)copy[[key copy]]=frozenStatusValue(value[key]);return [copy copy];
+ }
+ if([value isKindOfClass:NSArray.class]){
+  NSMutableArray *copy=[NSMutableArray arrayWithCapacity:[value count]];
+  for(id item in value)[copy addObject:frozenStatusValue(item)];return [copy copy];
+ }
+ return [value copy];
+}
+static dispatch_queue_t statusWriteQueue() {
+ static dispatch_queue_t queue;static dispatch_once_t once;
+ dispatch_once(&once,^{queue=dispatch_queue_create("local.icsm.status-writer",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));});
+ return queue;
+}
 static NSDictionary *displayInputState(UIWindowScene *scene) {
  NSMutableArray *windows=[NSMutableArray array];
  for(UIWindow *window in scene.windows) {
@@ -181,17 +224,30 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
  // Keep this snapshot UIKit-only; the touch module owns its safe diagnostics.
  return state;
 }
-@interface Controller:UIViewController
+#include "startup_progress.inc"
+#include "startup_announcement.inc"
+@interface Controller:UIViewController<MXMetricManagerSubscriber,UIDocumentPickerDelegate>
 @property(nonatomic,weak) UIWindowScene *gameScene;
 @property(nonatomic,strong) UIWindow *coverWindow;
 @property UIButton *importButton;
+@property UIButton *chooseZipButton;
+@property BOOL choosingZip;
+@property UIButton *exportLogsButton;
+@property BOOL exportingLogs;
+@property BOOL attemptedInstallation;
+@property ICSMStartupProgressView *startupProgress;
+@property ICSMStartupAnnouncementView *announcement;
+@property NSDictionary *announcementResult;
+@property NSMutableArray *startupStages;
 @property UILabel *errorLabel;@property NSTimer *timer;@property long long lastSequence;@property NSString *lastCapture;
+@property BOOL synchronousStatusWrite;
 @property BOOL routingSelfTestDone;
 @property BOOL startupFinished;@property BOOL menuReadyObserved;@property unsigned long long menuReadyFrame;
 @property BOOL savedVideoSynchronized;
 @property NSTimeInterval startupBegan;@property NSTimeInterval startupDuration;
 @end
 @implementation Controller
+#include "diagnostics_ui.inc"
 -(void)loadView{
  // Use the exact same UIKit layout as the OS launch screen throughout asset
  // validation and engine startup. SDL creates a separate normal-level window.
@@ -211,10 +267,23 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
 -(BOOL)prefersStatusBarHidden{return YES;}
 -(void)viewDidLoad{
  [super viewDidLoad];self.startupBegan=NSProcessInfo.processInfo.systemUptime;
+ self.startupStages=[NSMutableArray array];
+ self.startupProgress=[ICSMStartupProgressView new];
+ self.startupProgress.translatesAutoresizingMaskIntoConstraints=NO;
+ [self.view addSubview:self.startupProgress];
+ NSLayoutConstraint *preferredWidth=[self.startupProgress.widthAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.widthAnchor multiplier:0.72];
+ preferredWidth.priority=UILayoutPriorityDefaultHigh;
+ [NSLayoutConstraint activateConstraints:@[
+  [self.startupProgress.centerXAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.centerXAnchor],
+  [self.startupProgress.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-34],
+  preferredWidth,
+  [self.startupProgress.widthAnchor constraintLessThanOrEqualToConstant:600],
+  [self.startupProgress.widthAnchor constraintLessThanOrEqualToAnchor:self.view.safeAreaLayoutGuide.widthAnchor constant:-48]
+ ]];
  self.errorLabel=[UILabel new];self.errorLabel.textColor=UIColor.whiteColor;
  self.errorLabel.font=[UIFont systemFontOfSize:15];self.errorLabel.textAlignment=NSTextAlignmentCenter;
  self.errorLabel.backgroundColor=[UIColor colorWithWhite:0 alpha:0.65];
- self.errorLabel.layer.cornerRadius=8;self.errorLabel.layer.masksToBounds=YES;
+ self.errorLabel.layer.cornerRadius=12;self.errorLabel.layer.cornerCurve=kCACornerCurveContinuous;self.errorLabel.layer.masksToBounds=YES;
  self.errorLabel.numberOfLines=0;self.errorLabel.translatesAutoresizingMaskIntoConstraints=NO;
  [self.view addSubview:self.errorLabel];
  [NSLayoutConstraint activateConstraints:@[
@@ -234,43 +303,161 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
   [self.importButton.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-16],
   [self.importButton.widthAnchor constraintEqualToConstant:180],
   [self.importButton.heightAnchor constraintEqualToConstant:44]
- ]];self.importButton.hidden=YES;
+ ]];self.importButton.hidden=YES;self.errorLabel.hidden=YES;
+ self.exportLogsButton=[UIButton buttonWithType:UIButtonTypeSystem];
+ [self.exportLogsButton setTitle:@"导出报错日志" forState:UIControlStateNormal];
+ self.exportLogsButton.accessibilityIdentifier=@"ICSMStartupExportLogs";
+ self.exportLogsButton.titleLabel.font=[UIFont boldSystemFontOfSize:18];
+ self.exportLogsButton.tintColor=UIColor.whiteColor;self.exportLogsButton.backgroundColor=[UIColor colorWithWhite:0 alpha:0.6];
+ self.exportLogsButton.layer.cornerRadius=10;self.exportLogsButton.translatesAutoresizingMaskIntoConstraints=NO;
+ [self.exportLogsButton addTarget:self action:@selector(exportErrorLogs) forControlEvents:UIControlEventTouchUpInside];
+ [self.view addSubview:self.exportLogsButton];
+ [NSLayoutConstraint activateConstraints:@[
+  [self.exportLogsButton.trailingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.trailingAnchor constant:-16],
+  [self.exportLogsButton.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16],
+  [self.exportLogsButton.widthAnchor constraintEqualToConstant:180],
+  [self.exportLogsButton.heightAnchor constraintEqualToConstant:44]
+ ]];self.exportLogsButton.hidden=NO;
+ self.chooseZipButton=[UIButton buttonWithType:UIButtonTypeSystem];
+ [self.chooseZipButton setTitle:@"选择数据包 ZIP" forState:UIControlStateNormal];
+ self.chooseZipButton.accessibilityIdentifier=@"ICSMStartupChooseZIP";
+ self.chooseZipButton.titleLabel.font=[UIFont boldSystemFontOfSize:18];
+ self.chooseZipButton.tintColor=UIColor.whiteColor;self.chooseZipButton.backgroundColor=[UIColor colorWithWhite:0 alpha:0.6];
+ self.chooseZipButton.layer.cornerRadius=10;self.chooseZipButton.translatesAutoresizingMaskIntoConstraints=NO;
+ [self.chooseZipButton addTarget:self action:@selector(chooseDataPackage) forControlEvents:UIControlEventTouchUpInside];
+ [self.view addSubview:self.chooseZipButton];
+ [NSLayoutConstraint activateConstraints:@[
+  [self.chooseZipButton.leadingAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.leadingAnchor constant:16],
+  [self.chooseZipButton.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:16],
+  [self.chooseZipButton.widthAnchor constraintEqualToConstant:180],
+  [self.chooseZipButton.heightAnchor constraintEqualToConstant:44]
+ ]];
  NSData *old=[NSData dataWithContentsOfFile:[evidence stringByAppendingPathComponent:@"command.json"]];
  if(old)self.lastSequence=[[NSJSONSerialization JSONObjectWithData:old options:0 error:nil][@"sequence"] longLongValue];
  self.timer=[NSTimer timerWithTimeInterval:1 target:self selector:@selector(update) userInfo:nil repeats:YES];
  [NSRunLoop.mainRunLoop addTimer:self.timer forMode:NSRunLoopCommonModes];
+ [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(announcementActivityChanged:) name:UIApplicationWillResignActiveNotification object:nil];
+ [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(announcementActivityChanged:) name:UIApplicationDidBecomeActiveNotification object:nil];
+ [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(exportErrorLogsRequested:) name:@"ICSMExportErrorLogs" object:nil];
+ [MXMetricManager.sharedManager addSubscriber:self];
+ [self didReceiveDiagnosticPayloads:MXMetricManager.sharedManager.pastDiagnosticPayloads];
 }
--(void)startClient {runClient();}
+-(void)announcementActivityChanged:(NSNotification*)notification {
+ [self.announcement setForeground:[notification.name isEqualToString:UIApplicationDidBecomeActiveNotification]];
+}
+-(void)beginAnnouncement {
+ self.exportLogsButton.hidden=YES;
+ self.chooseZipButton.hidden=YES;
+ [self showLoading:@"加载完成" fraction:1];self.startupProgress.hidden=YES;
+ self.announcement=[ICSMStartupAnnouncementView new];
+ self.announcement.translatesAutoresizingMaskIntoConstraints=NO;[self.view addSubview:self.announcement];
+ [NSLayoutConstraint activateConstraints:@[
+  [self.announcement.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+  [self.announcement.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+  [self.announcement.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+  [self.announcement.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor]
+ ]];
+ [self.view layoutIfNeeded];[self.announcement begin];
+ printf("ICSM_ANNOUNCEMENT_BEGIN required_seconds=20\n");
+}
+-(void)showLoading:(NSString*)stage fraction:(double)fraction {
+ if(self.startupFinished)return;
+ [self.startupProgress showStage:stage fraction:fraction];
+ [self.view layoutIfNeeded];
+ NSDictionary *snapshot=self.startupProgress.snapshot;
+ NSString *last=self.startupStages.lastObject[@"stage"];
+ if(![last isEqualToString:snapshot[@"stage"]]) {
+  [self.startupStages addObject:@{@"stage":snapshot[@"stage"],@"seconds":@(NSProcessInfo.processInfo.systemUptime-self.startupBegan),
+   @"initial_fraction":snapshot[@"fraction"],@"indeterminate":snapshot[@"indeterminate"]}];
+ }
+ NSMutableDictionary *current=[snapshot mutableCopy];
+ current[@"pid"]=@(getpid());current[@"app_build"]=NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"";
+ current[@"stages"]=self.startupStages;current[@"visible"]=@YES;
+ [[NSJSONSerialization dataWithJSONObject:current options:0 error:nil] writeToFile:[evidence stringByAppendingPathComponent:@"startup-progress.json"] atomically:YES];
+}
+-(void)showLoadingError:(NSString*)message {
+ [self.startupProgress showError:message];
+ self.errorLabel.text=message;self.errorLabel.hidden=NO;
+ self.exportLogsButton.hidden=NO;
+ if(![NSFileManager.defaultManager fileExistsAtPath:[evidence stringByAppendingPathComponent:@"startup-error.json"]])
+  ICSMDiagnosticsRecordError(evidence,@"engine_startup",[NSError errorWithDomain:@"iCSM.Startup" code:result.load() userInfo:@{NSLocalizedDescriptionKey:message?:@"游戏启动失败"}]);
+ [self.view layoutIfNeeded];
+ NSMutableDictionary *failure=[self.startupProgress.snapshot mutableCopy];
+ failure[@"pid"]=@(getpid());failure[@"app_build"]=NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"";
+ failure[@"stages"]=self.startupStages;failure[@"visible"]=@YES;
+ [[NSJSONSerialization dataWithJSONObject:failure options:0 error:nil] writeToFile:[evidence stringByAppendingPathComponent:@"startup-progress.json"] atomically:YES];
+}
+-(void)startClient {
+ // Let an import-page export finish before Source creates its SDL window.
+ if(self.exportingLogs || self.choosingZip || self.presentedViewController){[self performSelector:@selector(startClient) withObject:nil afterDelay:0.25];return;}
+ runClient();
+}
 -(void)viewDidAppear:(BOOL)animated {
- [super viewDidAppear:animated];if(!started)[self beginInstallation];
+ [super viewDidAppear:animated];
+ // Explicit developer launch only: test the real picker without removing an
+ // existing player's data. No preference is persisted by this override.
+ if(!self.attemptedInstallation && [NSProcessInfo.processInfo.environment[@"ICSM_IMPORT_PAGE"] isEqual:@"1"]) {
+  self.attemptedInstallation=YES;self.importButton.hidden=NO;
+  [self showLoading:@"请选择配套数据包 ZIP，或检查已有资源" fraction:-1];return;
+ }
+ if(!self.attemptedInstallation)[self beginInstallation];
 }
--(void)beginInstallation {
- if(started)return;started=YES;initialOutput=sceneOutput(self.gameScene);
- self.importButton.hidden=YES;self.errorLabel.text=@"正在检查游戏数据…";
+-(void)chooseDataPackage {
+ if(started || self.exportingLogs || self.choosingZip || self.presentedViewController)return;
+ self.attemptedInstallation=YES;self.choosingZip=YES;
+ UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeZIP] asCopy:NO];
+ picker.delegate=self;picker.allowsMultipleSelection=NO;picker.shouldShowFileExtensions=YES;
+ picker.modalInPresentation=YES;
+ [self presentViewController:picker animated:YES completion:nil];
+ printf("ICSM_ZIP_PICKER presented=1\n");
+}
+-(void)documentPickerWasCancelled:(UIDocumentPickerViewController*)controller {
+ self.choosingZip=NO;printf("ICSM_ZIP_PICKER cancelled=1\n");
+}
+-(void)documentPicker:(UIDocumentPickerViewController*)controller didPickDocumentsAtURLs:(NSArray<NSURL*>*)urls {
+ self.choosingZip=NO;
+ if(urls.count!=1)return;
+ printf("ICSM_ZIP_PICKER selected=1\n");
+ [self beginInstallationFromArchive:urls.firstObject];
+}
+-(void)beginInstallation {[self beginInstallationFromArchive:nil];}
+-(void)beginInstallationFromArchive:(NSURL*)archive {
+ if(started || self.exportingLogs || self.choosingZip)return;self.attemptedInstallation=YES;started=YES;initialOutput=sceneOutput(self.gameScene);
+ self.chooseZipButton.enabled=NO;
+ self.importButton.hidden=YES;self.exportLogsButton.hidden=NO;self.errorLabel.hidden=YES;self.startupProgress.hidden=NO;
+ [self showLoading:@"正在检查游戏数据" fraction:0];
  dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED,0),^{
   @autoreleasepool {
    NSString *cache=[NSSearchPathForDirectoriesInDomains(NSCachesDirectory,NSUserDomainMask,YES).firstObject stringByAppendingPathComponent:@"SourceMetal-I5"];
    NSString *receipt=[NSHomeDirectory() stringByAppendingPathComponent:@"Library/Application Support/iCSM/data-receipts.json"];
-   NSError *error=nil;__block CFAbsoluteTime lastUpdate=0;
-   BOOL ready=ICSMPrepareInstallation(root,cache,ICSMDistributionManifest(),receipt,^(NSString *stage,double fraction){
-    CFAbsoluteTime now=CFAbsoluteTimeGetCurrent();if(now-lastUpdate<0.2 && fraction<1)return;lastUpdate=now;
-    NSString *message=[NSString stringWithFormat:@"%@  %.0f%%",stage,fraction*100];
-    dispatch_async(dispatch_get_main_queue(),^{self.errorLabel.text=message;});
-   },&error);
+   NSError *error=nil;__block CFAbsoluteTime lastUpdate=0;__block NSString *lastStage=nil;
+   ICSMInstallProgress progress=^(NSString *stage,double fraction){
+    NSString *kind=[stage componentsSeparatedByString:@"\n"].firstObject;
+    CFAbsoluteTime now=CFAbsoluteTimeGetCurrent();if([lastStage isEqualToString:kind] && now-lastUpdate<0.2 && fraction<1)return;lastUpdate=now;lastStage=kind;
+    dispatch_async(dispatch_get_main_queue(),^{[self showLoading:stage fraction:fraction];});
+   };
+   BOOL ready=archive?ICSMPrepareInstallationFromArchive(archive,root,cache,ICSMDistributionManifest(),receipt,progress,&error):
+    ICSMPrepareInstallation(root,cache,ICSMDistributionManifest(),receipt,progress,&error);
    if(!ready){
-    dispatch_async(dispatch_get_main_queue(),^{started=NO;self.errorLabel.text=error.localizedDescription;self.importButton.hidden=NO;});
+    ICSMDiagnosticsRecordError(evidence,@"data_and_shader_preparation",error);
+    dispatch_async(dispatch_get_main_queue(),^{started=NO;self.chooseZipButton.enabled=YES;[self showLoadingError:error.localizedDescription];self.importButton.hidden=NO;self.startupProgress.hidden=YES;});
     return;
    }
+   dispatch_async(dispatch_get_main_queue(),^{[self showLoading:@"正在准备游戏配置与字体" fraction:-1];});
    if(prepareGame())dispatch_async(dispatch_get_main_queue(),^{
-    self.errorLabel.text=@"正在载入大厅和渲染管线…";
-    // Schedule outside a main dispatch block: Source itself pumps UIKit.
-    [self performSelector:@selector(startClient) withObject:nil afterDelay:0.0];
+    [self showLoading:@"正在初始化游戏模块与 Metal 渲染管线" fraction:-1];
+    // Let UIKit commit the new caption before entering Source's synchronous
+    // initialization. This is a presentation turn, not a progress estimate.
+    // Source itself subsequently pumps UIKit on this main thread.
+    [self performSelector:@selector(startClient) withObject:nil afterDelay:0.06];
    });
+   else dispatch_async(dispatch_get_main_queue(),^{[self showLoadingError:@"游戏配置准备失败，请重新打开应用。"];});
   }
  });
 }
 -(void)update{
- if(started && result.load()!=-999){if(!self.startupFinished)self.errorLabel.text=@"游戏启动失败，请重新打开应用。";[self.timer invalidate];self.timer=nil;return;}
+ CFAbsoluteTime statusBegan=CFAbsoluteTimeGetCurrent();
+ if(started && result.load()!=-999){if(!self.startupFinished)[self showLoadingError:@"游戏启动失败，请重新打开应用。"];[self.timer invalidate];self.timer=nil;return;}
  if(!mainQueueProbePending){mainQueueProbePending=YES;dispatch_async(dispatch_get_main_queue(),^{++mainQueueCompletions;mainQueueProbePending=NO;});}
  void *engine=dlopen([[NSBundle.mainBundle.privateFrameworksPath stringByAppendingPathComponent:@"engine.framework/engine"] fileSystemRepresentation],RTLD_NOLOAD|RTLD_NOW);auto ready=engine?(bool(*)())dlsym(engine,"CSGOIOSHostReady"):nullptr;auto queue=engine?(void(*)(const char*))dlsym(engine,"CSGOIOSQueueCommand"):nullptr;BOOL hostReady=ready && ready();
  NSData *data=[NSData dataWithContentsOfFile:[evidence stringByAppendingPathComponent:@"command.json"]];NSDictionary *cmd=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;long long seq=[cmd[@"sequence"] longLongValue];
@@ -280,6 +467,9 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
   do {self.lastCapture=[NSString stringWithFormat:@"frame-%@.gputrace",NSUUID.UUID.UUIDString];}
   while([[NSFileManager defaultManager] fileExistsAtPath:[evidence stringByAppendingPathComponent:self.lastCapture]]);
   text=[NSString stringWithFormat:@"m6_metal_capture \"%@\" 1",[evidence stringByAppendingPathComponent:self.lastCapture]];
+ }else if([text isEqualToString:@"I5_STATUS_SYNC"] || [text isEqualToString:@"I5_STATUS_ASYNC"]) {
+  // Finite diagnostics A/B; normal launches always use the worker.
+  self.synchronousStatusWrite=[text isEqualToString:@"I5_STATUS_SYNC"];text=@"";
  }else if([text hasPrefix:@"I5_NETWORK_PROBE "]) {
   probeLocalNetwork([text substringFromIndex:[@"I5_NETWORK_PROBE " length]]);
   text=@"";
@@ -314,6 +504,7 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
   if(client)dlclose(client);
   unsigned long long frames=[gpu[@"frames"] unsignedLongLongValue];
   if(readyForLobby && [gpu[@"attached"] boolValue]){
+   if(!self.announcement)[self showLoading:@"正在呈现大厅画面" fraction:-1];
    if(!self.menuReadyObserved){self.menuReadyObserved=YES;self.menuReadyFrame=frames;printf("ICSM_LOBBY_READY frame=%llu\n",frames);}
    // Wait for subsequent real Metal frames instead of dismissing on engine
    // initialization or on a fixed delay before the first lobby paint.
@@ -323,7 +514,20 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
      if(window!=cover && !window.hidden && [NSStringFromClass(window.class) isEqualToString:@"SDL_uikitwindow"]){gameWindow=window;break;}
     }
     if(gameWindow){
+     if(!self.announcement)[self beginAnnouncement];
+     if([self.announcement tick]){
+     self.announcementResult=self.announcement.snapshot;
+     NSMutableDictionary *announcementRecord=[self.announcementResult mutableCopy];
+     announcementRecord[@"visible"]=@NO;announcementRecord[@"pid"]=@(getpid());
+     self.announcementResult=announcementRecord;
+     [[NSJSONSerialization dataWithJSONObject:announcementRecord options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[evidence stringByAppendingPathComponent:@"startup-announcement.json"] atomically:YES];
+     printf("ICSM_ANNOUNCEMENT_FINISHED foreground_seconds=%.3f\n",[announcementRecord[@"foreground_seconds"] doubleValue]);
+     [self.announcement removeFromSuperview];self.announcement=nil;
      self.startupFinished=YES;self.startupDuration=NSProcessInfo.processInfo.systemUptime-self.startupBegan;
+     NSMutableDictionary *complete=[self.startupProgress.snapshot mutableCopy];
+     complete[@"pid"]=@(getpid());complete[@"app_build"]=NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"";
+     complete[@"stages"]=self.startupStages;complete[@"visible"]=@NO;complete[@"duration"]=@(self.startupDuration);
+     [[NSJSONSerialization dataWithJSONObject:complete options:0 error:nil] writeToFile:[evidence stringByAppendingPathComponent:@"startup-progress.json"] atomically:YES];
      cover.hidden=YES;[gameWindow makeKeyAndVisible];
      // UIKit's scene delegate must own the actual game window after startup.
      // Geometry and input no longer belong to the hidden launch-cover window.
@@ -331,15 +535,18 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
      if([delegate respondsToSelector:@selector(setWindow:)])delegate.window=gameWindow;
      self.coverWindow=nil;
      printf("ICSM_STARTUP_FINISHED duration=%.3f ready_frame=%llu reveal_frame=%llu\n",self.startupDuration,self.menuReadyFrame,frames);
+     }
     }
    }
-  }else{self.menuReadyObserved=NO;}
+  }else{self.menuReadyObserved=NO;[self showLoading:@"正在载入大厅界面与背景" fraction:-1];}
  }
- if(!self.startupFinished && result.load()!=-999)self.errorLabel.text=@"游戏启动失败，请重新打开应用。";
+ if(!self.startupFinished && result.load()!=-999)[self showLoadingError:@"游戏启动失败，请重新打开应用。"];
  void *sdl=dlopen([[NSBundle.mainBundle.privateFrameworksPath stringByAppendingPathComponent:@"SDL2-2.0.framework/SDL2-2.0"] fileSystemRepresentation],RTLD_NOLOAD|RTLD_NOW);
+ auto touchSnapshot=sdl?(NSDictionary*(*)())dlsym(sdl,"SourceTouchDiagnosticsSnapshot"):nullptr;
  auto touchDiagnostics=sdl?(size_t(*)(char*,size_t))dlsym(sdl,"SourceTouchCopyDiagnosticsJSON"):nullptr;
  NSDictionary *touch=@{@"loaded":@NO};
- if(touchDiagnostics){char json[65536]={};size_t length=touchDiagnostics(json,sizeof(json));if(length && length<sizeof(json)){NSData *data=[NSData dataWithBytes:json length:length];id decoded=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if([decoded isKindOfClass:NSDictionary.class])touch=decoded;}}
+ if(touchSnapshot)touch=touchSnapshot();
+ else if(touchDiagnostics){char json[65536]={};size_t length=touchDiagnostics(json,sizeof(json));if(length && length<sizeof(json)){NSData *data=[NSData dataWithBytes:json length:length];id decoded=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];if([decoded isKindOfClass:NSDictionary.class])touch=decoded;}}
  if(!self.routingSelfTestDone && UIApplication.sharedApplication.applicationState==UIApplicationStateActive && [touch[@"available"] boolValue] && [touch[@"gameplay"] boolValue] && [touch[@"active_touches"] isKindOfClass:NSNumber.class] && [touch[@"active_touches"] integerValue]==0 && [touch[@"rendered_frames"] unsignedLongLongValue]>0 && [touch[@"controls"] isKindOfClass:NSArray.class] && [touch[@"controls"] count]>0){
   // Execute once after a real gameplay frame, with no finger on the screen.
   // The module snapshots/restores its routing state and never invokes the host
@@ -363,13 +570,33 @@ static NSDictionary *displayInputState(UIWindowScene *scene) {
   if(client)dlclose(client);
  }
  task_vm_info_data_t info={};mach_msg_type_number_t count=TASK_VM_INFO_COUNT;task_info(mach_task_self(),TASK_VM_INFO,(task_info_t)&info,&count);
- NSDictionary *startup=@{@"visible":@(!self.startupFinished),@"menu_ready_observed":@(self.menuReadyObserved),@"ready_frame":@(self.menuReadyFrame),@"duration":@(self.startupDuration)};
- NSDictionary *status=@{@"milestone":@"I5",@"purpose":@"four-finger touch trial",@"display_name":NSBundle.mainBundle.infoDictionary[@"CFBundleDisplayName"]?:@"",@"video_state":videoState,@"network":networkInterfaceSnapshot(),@"display_input":displayState,@"screen_policy":screenPolicy?:@{},@"startup":startup,@"app_version":NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"]?:@"",@"app_build":NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"",@"pid":@(getpid()),@"updated_utc":[[NSISO8601DateFormatter new] stringFromDate:NSDate.date],@"client_result":@(result.load()),@"command_sequence":@(self.lastSequence),@"capture_file":self.lastCapture?:@"",@"physical_footprint":@(info.phys_footprint),@"foreground":@(UIApplication.sharedApplication.applicationState==UIApplicationStateActive),@"host_ready":@(hostReady),@"metal":gpu,@"touch":touch,@"loaded_images":loadedImages()};[[NSJSONSerialization dataWithJSONObject:status options:NSJSONWritingPrettyPrinted error:nil] writeToFile:[evidence stringByAppendingPathComponent:@"status.json"] atomically:YES];
+ NSDictionary *startup=@{@"visible":@(!self.startupFinished),@"menu_ready_observed":@(self.menuReadyObserved),@"ready_frame":@(self.menuReadyFrame),@"duration":@(self.startupDuration),@"progress":self.startupProgress.snapshot,
+  @"announcement":self.announcement?self.announcement.snapshot:self.announcementResult?:@{@"visible":@NO,@"required_seconds":@20,@"complete":@NO}};
+ NSDictionary *status=@{@"milestone":@"I5",@"purpose":@"four-finger touch trial",@"display_name":NSBundle.mainBundle.infoDictionary[@"CFBundleDisplayName"]?:@"",@"video_state":videoState,@"network":networkInterfaceSnapshot(),@"display_input":displayState,@"screen_policy":screenPolicy?:@{},@"startup":startup,@"app_version":NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"]?:@"",@"app_build":NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"]?:@"",@"pid":@(getpid()),@"updated_utc":[[NSISO8601DateFormatter new] stringFromDate:NSDate.date],@"client_result":@(result.load()),@"command_sequence":@(self.lastSequence),@"capture_file":self.lastCapture?:@"",@"physical_footprint":@(info.phys_footprint),@"foreground":@(UIApplication.sharedApplication.applicationState==UIApplicationStateActive),@"host_ready":@(hostReady),@"metal":gpu,@"touch":touch,@"loaded_images":loadedImages()};
+ NSMutableDictionary *statusCopy=[frozenStatusValue(status) mutableCopy];
+ statusCopy[@"status_capture_ms"]=@((CFAbsoluteTimeGetCurrent()-statusBegan)*1000);
+ statusCopy[@"status_write_async"]=@(!self.synchronousStatusWrite);
+ NSDictionary *frozen=[statusCopy copy];NSString *path=[evidence stringByAppendingPathComponent:@"status.json"];
+ void (^write)(void)=^{@autoreleasepool{[[NSJSONSerialization dataWithJSONObject:frozen options:0 error:nil] writeToFile:path atomically:YES];}};
+ if(self.synchronousStatusWrite)dispatch_sync(statusWriteQueue(),write);
+ else dispatch_async(statusWriteQueue(),write);
 }
 @end
 @interface SceneDelegate:UIResponder<UIWindowSceneDelegate>@property(nonatomic,strong) UIWindow *window;@end
 @implementation SceneDelegate
--(void)scene:(UIScene*)scene willConnectToSession:(UISceneSession*)session options:(UISceneConnectionOptions*)options{root=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject;evidence=[root stringByAppendingPathComponent:@"I5"];[[NSFileManager defaultManager] createDirectoryAtPath:evidence withIntermediateDirectories:YES attributes:nil error:nil];self.window=[[UIWindow alloc] initWithWindowScene:(UIWindowScene*)scene];self.window.windowLevel=UIWindowLevelNormal+1;Controller *controller=[Controller new];controller.gameScene=(UIWindowScene*)scene;controller.coverWindow=self.window;self.window.rootViewController=controller;[self.window makeKeyAndVisible];UIApplication.sharedApplication.idleTimerDisabled=YES;}
+-(void)scene:(UIScene*)scene willConnectToSession:(UISceneSession*)session options:(UISceneConnectionOptions*)options{
+ root=NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask,YES).firstObject;evidence=[root stringByAppendingPathComponent:@"I5"];
+ static dispatch_once_t loggingOnce;dispatch_once(&loggingOnce,^{
+  NSError *error=nil;BOOL ready=ICSMDiagnosticsBeginSession(root,evidence,&error);
+  FILE *log=ready?freopen([[evidence stringByAppendingPathComponent:@"client.log"] fileSystemRepresentation],"a",stdout):nullptr;
+  if(log){dup2(fileno(stdout),STDERR_FILENO);setvbuf(stdout,nullptr,_IOLBF,0);setvbuf(stderr,nullptr,_IOLBF,0);}
+  if(error)ICSMDiagnosticsRecordError(evidence,@"logging_initialization",error);
+  printf("I5_START pid=%d build=%s logging_ready=%d\n",getpid(),[NSBundle.mainBundle.infoDictionary[@"CFBundleVersion"] UTF8String],log!=nullptr);
+ });
+ self.window=[[UIWindow alloc] initWithWindowScene:(UIWindowScene*)scene];self.window.windowLevel=UIWindowLevelNormal+1;
+ Controller *controller=[Controller new];controller.gameScene=(UIWindowScene*)scene;controller.coverWindow=self.window;self.window.rootViewController=controller;
+ [self.window makeKeyAndVisible];UIApplication.sharedApplication.idleTimerDisabled=YES;
+}
 -(void)windowScene:(UIWindowScene*)scene didUpdateEffectiveGeometry:(UIWindowSceneGeometry*)previous {
  UIInterfaceOrientation orientation=scene.effectiveGeometry.interfaceOrientation;
  printf("ICSM_SCENE_GEOMETRY orientation=%ld previous=%ld locked=%d\n",(long)orientation,(long)previous.interfaceOrientation,scene.effectiveGeometry.interfaceOrientationLocked);

@@ -19,6 +19,14 @@ The layout follows `design/touch-controls-v1.json` and the root `output/four-fin
 
 Saved layout overrides replace the default positions and sizes. The settings entry “触摸屏键位调整” opens a UIKit editor; drafts become persistent only on Save. Inspect and Drop are editable controls that invoke the original paired weapon-inspect commands and drop command.
 
+## Private room browser
+
+The main-menu “搜索房间” button invokes `icsm_room_browser`. `room_browser.inc` presents native LAN and Internet tabs, a saved-address input with the system keyboard, refresh, room details and a return button. LAN uses declared `_icsm._udp` Bonjour services; the Internet tab queries player-supplied addresses. It does not rely on a Steam master list. Passwords are entered for a join and are never saved with the address list.
+
+`room_query.h` sends A2S_INFO over a connected UDP socket on a background queue, handles the original challenge reply and parses bounded fields from the 2019 `engine/baseserver.cpp` serialization. Address validation prevents console-command injection. The Source bridge sets the password as a ConVar value and then uses the original `connect` command. Queries and Bonjour callbacks are discarded after the user leaves or starts a new search.
+
+The Mac private server publishes Bonjour during its lifetime. Its NO_STEAM engine uses the original A2S_INFO handler with challenge and rate checks even with `-nomaster`, and announces no Steam lobby reservation. Legacy private servers that suppress A2S_INFO must be updated before they can appear in this browser. Public address reachability still depends on the server network.
+
 Every touch receives a permanent owner at began. Buttons retain their action until end or cancellation even when a finger leaves the button. Only a touch that starts on empty space in the entire right half of the view can emit look. Every control's whole hit rectangle excludes look, including disabled and empty weapon slots. Leaving the look area or crossing a control updates the baseline without emitting displacement, so re-entry does not jump. Movement and look have separate owners; held actions aggregate all touch owners and release only when their count reaches zero.
 
 Look callbacks report each actual floating-point UIKit displacement once, in timestamp order. Actual coalesced moved samples are included; predicted samples are never queried. Ended processes its final real position before releasing the owner. Cancelled adds no final movement and clears held actions, movement and queued relative samples. The UI applies no sensitivity, acceleration, smoothing, inertia, frame-time scaling or render-resolution scaling. The Source bridge owns constant user sensitivity and per-sample pitch limits.

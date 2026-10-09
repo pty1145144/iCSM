@@ -80,7 +80,7 @@ struct Shader : Object {
     id<MTLLibrary> library = nil;
     id<MTLFunction> function = nil;
     std::string name, label, key, msl;
-    unsigned serial = 0, shadowSamplerMask = 0;
+    unsigned serial = 0, shadowSamplerMask = 0, worldMaterialSamplerMask = 0;
     unsigned floatCount = 0, intCount = 0, boolCount = 0;
     std::vector<MOJOSHADER_uniform> uniforms;
     bool hasColor = false;
@@ -117,6 +117,8 @@ struct EncodedState {
     std::array<bool,2> uniformValid{};
 };
 struct SamplerCache {
+    float minLOD = 0;
+    unsigned maxAnisotropy = 1;
     std::array<DWORD,14> values{};
     bool shadow = false;
     id<MTLSamplerState> result = nil;

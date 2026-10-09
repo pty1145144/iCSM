@@ -1,0 +1,113 @@
+/* Shared Source backdrop frost keeps settings labels/controls sharp. */
+.ICSMMobileSettings.mainmenu-content__container
+{
+    padding: 0px;
+    overflow: clip clip;
+    /* Same depth as the play panel; apply once around every settings tab. */
+    background-color: rgba(0, 0, 0, 0.90);
+    border: 0px solid transparent;
+    border-radius: 0px;
+}
+
+#SettingsMenuContent
+{
+    width: 96%;
+    horizontal-align: center;
+    height: fill-parent-flow(1);
+    overflow: clip clip;
+}
+
+.ICSMMobileSettings .content-navbar
+{
+    background-color: none;
+    padding-left: 40px;
+    padding-right: 40px;
+}
+
+.ICSMMobileSettings .content-navbar__tabs
+{
+    overflow: scroll clip;
+}
+
+.ICSMMobileSettings .SettingsMenuTabContent
+{
+    background-color: transparent;
+    border: 0px solid transparent;
+    border-radius: 0px;
+    padding: 8px 0px;
+    blur: none;
+}
+
+/* UIKit supplies the touch scroll indicator, while this Source scrollbar
+   remains present as the authoritative range/offset model. */
+#ICSMSettingsScrollViewport VerticalScrollBar
+{
+    opacity: 0;
+}
+
+.ICSMMobileSettings .SettingsBackground
+{
+    width: 100%;
+    padding: 24px 40px;
+    margin: 8px 0px;
+    background-color: transparent;
+    border-radius: 0px;
+}
+
+.ICSMMobileSettings .SettingsMenuDropdownContainer
+{
+    min-height: 56px;
+    vertical-align: center;
+}
+
+.ICSMMobileSettings .SettingsSectionTitleLabel
+{
+    font-size: 28px;
+    color: white;
+}
+
+.ICSMMobileSettings .content-navbar__title
+{
+    color: white;
+}
+
+/* Use the available row width for names; retain the original widgets. */
+.ICSMMobileSettings .SettingsMenuDropdownContainer > .half-width
+{
+    width: fill-parent-flow(1);
+    font-size: 22px;
+    color: white;
+    white-space: normal;
+}
+
+.ICSMMobileSettings CSGOSettingsEnumDropDown
+{
+    max-width: 40%;
+}
+
+.ICSMMobileSettings CSGOSettingsEnumDropDown Label
+{
+    font-size: 22px;
+    color: white;
+}
+
+.ICSMMobileSettings .content-controls-actions-bar
+{
+    height: 80px;
+    padding: 12px 0px;
+    background-color: none;
+}
+
+#ICSMVideoInternal
+{
+    visibility: collapse;
+}
+
+.ICSMQualityPresets { flow-children: right; width: 100%; margin-bottom: 16px; }
+.ICSMQualityTier { width: fill-parent-flow(1); height: 88px; margin-right: 12px; padding: 12px; flow-children: down; border-radius: 12px; background-color: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); }
+.ICSMQualityTier > Label { horizontal-align: center; color: white; font-size: 24px; }
+.ICSMQualityTier .ICSMQualityTierNote { color: #cccccc; font-size: 18px; margin-top: 4px; }
+.ICSMQualityTier:disabled { opacity: 0.45; }
+.ICSMQualityTierSelected { background-color: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.5); }
+.ICSMVideoPresetNote { width: 100%; white-space: normal; font-size: 18px; color: #cccccc; margin: 0px 0px 16px; }
+#ICSMVideoActionsInternal { visibility: collapse; }

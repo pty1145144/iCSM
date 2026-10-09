@@ -31,5 +31,13 @@
     ],
     "modifications": "none"
   },
-  "coverage": "OS launch storyboard reused for resource validation and retained above SDL until original lobby UI and movie texture are ready, followed by later real Metal frames."
+  "coverage": "OS launch storyboard reused for resource validation and retained above SDL until original lobby UI and movie texture are ready, followed by later real Metal frames.",
+  "loading_ui": {
+    "source": "startup_progress.inc",
+    "material": "UIKit UIBlurEffectStyleSystemMaterialDark, regular frosted glass",
+    "progress": "Actual installer bytes/files per stage; indeterminate engine/lobby work, completion gated by actual lobby-ready state and later Metal frames",
+    "detail": "Stage plus current resource filename, native system font",
+    "performance": "Single small blur track during startup only; no liquid glass; scan stops on success or failure",
+    "documentation": "https://developer.apple.com/documentation/uikit/uivisualeffectview/"
+  }
 }

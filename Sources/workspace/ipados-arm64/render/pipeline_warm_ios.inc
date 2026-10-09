@@ -3,6 +3,7 @@
 #include "pipeline_warm_identity.h"
 #include <CommonCrypto/CommonDigest.h>
 #include <atomic>
+#include "touch_ios.h"
 static Device *warmOwner=nullptr;
 static NSMutableDictionary *warmRecords=nil,*warmFunctions=nil,*warmLibraries=nil;
 static std::map<std::string,id<MTLRenderPipelineState>> warmStates;
@@ -17,6 +18,40 @@ static uint64_t warmRevision=0;
 static bool warmDirty=false;
 static double warmChanged=0,warmLoadMS=0;
 static uint64_t warmLoaded=0,warmHits=0,warmNew=0,warmFailures=0,warmArchiveHits=0,warmArchiveMisses=0;
+static constexpr uint64_t warmArchiveLimit=64ULL*1024*1024;
+static std::atomic<uint64_t> warmArchiveBytes{0};
+static uint64_t warmLegacyArchiveBytes=0;
+static NSString *warmFolder();
+static uint64_t warmFileBytes(NSString *path) {
+    NSDictionary *attributes=[[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+    return [attributes[NSFileSize] unsignedLongLongValue];
+}
+void warmLoadArchive(Device &d) {
+    NSString *folder=warmFolder();if(!folder)return;
+    auto files=NSFileManager.defaultManager;
+    [files createDirectoryAtPath:folder withIntermediateDirectories:YES attributes:nil error:nil];
+    // The old archive repeatedly re-imported its own script when checkpointed.
+    // Never feed that accumulated script to Metal again. Shader libraries and
+    // verified descriptor manifests remain valid and regenerate a compact file.
+    NSString *legacy=[folder stringByAppendingPathComponent:[NSString stringWithFormat:@"pipelines-%llu.binary.metallib",device().registryID]];
+    warmLegacyArchiveBytes=warmFileBytes(legacy);
+    if(warmLegacyArchiveBytes)[files removeItemAtPath:legacy error:nil];
+    d.archiveURL=[NSURL fileURLWithPath:[folder stringByAppendingPathComponent:[NSString stringWithFormat:@"pipelines-%llu-compact-v2.binary.metallib",device().registryID]]];
+    warmArchiveBytes=warmFileBytes(d.archiveURL.path);
+    auto descriptor=[MTLBinaryArchiveDescriptor new];NSError *error=nil;
+    if(warmArchiveBytes.load() && warmArchiveBytes.load()<=warmArchiveLimit)descriptor.url=d.archiveURL;
+    else if(warmArchiveBytes.load()) {
+        Warning("ICSM_PIPELINE oversized optional archive discarded: %llu bytes\n",warmArchiveBytes.load());
+        [files removeItemAtURL:d.archiveURL error:nil];warmArchiveBytes=0;
+    }
+    d.archive=[device() newBinaryArchiveWithDescriptor:descriptor error:&error];
+    if(!d.archive && descriptor.url) {
+        descriptor.url=nil;error=nil;warmArchiveBytes=0;
+        d.archive=[device() newBinaryArchiveWithDescriptor:descriptor error:&error];
+    }
+    if(!d.archive)Warning("ICSM_PIPELINE binary cache unavailable; using normal compilation\n");
+    Msg("ICSM_PIPELINE compact archive bytes=%llu discarded_legacy_bytes=%llu\n",warmArchiveBytes.load(),warmLegacyArchiveBytes);
+}
 // Build 81 uses the identical descriptor schema and shader keys. Accept only
 // that known identity when migrating its existing prewarm manifest; every
 // entry still passes shader SHA256 and complete descriptor round-trip checks.
@@ -85,9 +120,10 @@ static id<MTLRenderPipelineState> warmBuild(Device &d,MTLRenderPipelineDescripto
         id<MTLRenderPipelineState> p=[device() newRenderPipelineStateWithDescriptor:desc options:MTLPipelineOptionFailOnBinaryArchiveMiss reflection:nil error:error];
         if(p){++warmArchiveHits;return p;}
         ++warmArchiveMisses;*error=nil;
-        // A missing or outdated binary is normal cache fallback, not fatal.
-        if([d.archive addRenderPipelineFunctionsWithDescriptor:desc error:error])d.archiveDirty=true;
-        else {Warning("ICSM_PIPELINE archive insertion failed: %s\n",(*error).localizedDescription.UTF8String);desc.binaryArchives=nil;*error=nil;}
+        // Keep the live archive read-only. Mutating an imported archive expands
+        // its serialized script in RAM; only the fresh checkpoint writer adds
+        // descriptors. Missing binaries use the ordinary compilation fallback.
+        desc.binaryArchives=nil;d.archiveDirty=true;
     }
     return [device() newRenderPipelineStateWithDescriptor:desc error:error];
 }
@@ -158,11 +194,11 @@ void warmInitialize(Device &d) {
     warmArchiveDescriptors=[NSMutableArray array];
     if(!warmSaveQueue)warmSaveQueue=dispatch_queue_create("iCSM immutable pipeline cache writer",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));
     const char *enabled=getenv("ICSM_PIPELINE_PREWARM");if(enabled && !strcmp(enabled,"0"))return;
-    double start=Plat_FloatTime();NSData *data=[NSData dataWithContentsOfFile:warmPath];
+    double start=Plat_FloatTime();NSData *data=warmFileBytes(warmPath)<=16*1024*1024?[NSData dataWithContentsOfFile:warmPath]:nil;
     bool migrating=false;
     if(!data) {
         NSString *legacy=[warmFolder() stringByAppendingPathComponent:[NSString stringWithFormat:@"pipeline-descriptors-%llu-%@.json",device().registryID,warmLegacyIdentity]];
-        data=[NSData dataWithContentsOfFile:legacy];migrating=data!=nil;
+        data=warmFileBytes(legacy)<=16*1024*1024?[NSData dataWithContentsOfFile:legacy]:nil;migrating=data!=nil;
     }
     if(!data || data.length>16*1024*1024)return;
     NSDictionary *manifest=[NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
@@ -182,9 +218,15 @@ void warmInitialize(Device &d) {
     }}
     warmLoadMS=(Plat_FloatTime()-start)*1000;
     if(migrating){warmDirty=true;warmChanged=Plat_FloatTime();}
+    // Restored, already archived descriptors are not new work. In particular,
+    // cold launch must not immediately reload and rewrite an unchanged archive.
+    if(!migrating && !d.archiveDirty)warmSavedRevision=warmRevision;
     Msg("ICSM_PIPELINE_PREWARM loaded=%llu failures=%llu time_ms=%.3f\n",warmLoaded,warmFailures,warmLoadMS);
 }
 void warmCheckpoint(Device &d,bool force) {
+    // Even lifecycle-forced checkpoints defer Metal compilation during a match.
+    // All new immutable descriptors stay available for the next lobby checkpoint.
+    if(SourceTouchSessionActive())return;
     if(warmOwner!=&d || (!warmDirty && !d.archiveDirty && warmRevision<=warmSavedRevision.load()))return;
     if(warmSavePending.load() || !warmArchiveDescriptors.count || !warmPath || !d.archiveURL)return;
     if(!force && Plat_FloatTime()-warmChanged<10)return;
@@ -203,9 +245,9 @@ void warmCheckpoint(Device &d,bool force) {
     dispatch_async(warmSaveQueue,^{@autoreleasepool {
         const double began=CACurrentMediaTime();NSError *error=nil;
         auto desc=[MTLBinaryArchiveDescriptor new];
-        if([[NSFileManager defaultManager] fileExistsAtPath:url.path])desc.url=url;
+        // Start empty every time. Importing the previous archive before adding
+        // the full descriptor snapshot duplicates its script on each checkpoint.
         auto archive=[gpu newBinaryArchiveWithDescriptor:desc error:&error];
-        if(!archive){desc.url=nil;error=nil;archive=[gpu newBinaryArchiveWithDescriptor:desc error:&error];}
         bool ok=archive!=nil;
         for(MTLRenderPipelineDescriptor *pipeline in descriptors) {
             if(!ok)break;
@@ -214,11 +256,13 @@ void warmCheckpoint(Device &d,bool force) {
         NSString *suffix=[NSString stringWithFormat:@".%@.tmp",NSUUID.UUID.UUIDString];
         NSURL *temporary=[NSURL fileURLWithPath:[url.path stringByAppendingString:suffix]];
         if(ok)ok=[archive serializeToURL:temporary error:&error];
+        uint64_t bytes=ok?warmFileBytes(temporary.path):0;
+        if(ok && (!bytes || bytes>warmArchiveLimit))ok=false;
         if(ok)ok=rename(temporary.path.UTF8String,url.path.UTF8String)==0;
         [[NSFileManager defaultManager] removeItemAtURL:temporary error:nil];
         if(ok)ok=[data writeToFile:manifestPath atomically:YES];
         warmSaveMS=(CACurrentMediaTime()-began)*1000;
-        if(ok){warmSavedRevision=revision;++warmSaves;}
+        if(ok){warmArchiveBytes=bytes;warmSavedRevision=revision;++warmSaves;}
         else{++warmSaveFailures;fprintf(stderr,"ICSM_PIPELINE async cache save failed; previous cache retained: %s\n",error.localizedDescription.UTF8String?:"publication failed");}
         warmSavePending=false;
     }});
@@ -226,7 +270,7 @@ void warmCheckpoint(Device &d,bool force) {
 void warmForget(Device &d) {warmCheckpoint(d,true);warmStates.clear();warmFunctions=nil;warmFunctionOwners.clear();warmLibraries=nil;warmRecords=nil;warmArchiveDescriptors=nil;warmOwner=nullptr;}
 extern "C" __attribute__((visibility("default"))) void SourceMetalPipelineCheckpoint(bool force) {if(warmOwner)warmCheckpoint(*warmOwner,force);}
 extern "C" __attribute__((visibility("default"))) NSDictionary *SourceMetalPipelineSnapshot() {
-    return @{@"identity":@ICSM_PIPELINE_IDENTITY,@"loaded":@(warmLoaded),@"prewarm_ms":@(warmLoadMS),@"hits":@(warmHits),@"new_states":@(warmNew),@"failures":@(warmFailures),@"archive_hits":@(warmArchiveHits),@"archive_misses":@(warmArchiveMisses),@"saves":@(warmSaves.load()),@"records":@(warmRecords.count),@"dirty":@(warmDirty || warmRevision>warmSavedRevision.load()),@"save_pending":@(warmSavePending.load()),@"save_failures":@(warmSaveFailures.load()),@"save_worker_ms":@(warmSaveMS.load()),@"persistence":@"Immutable descriptor snapshot on utility queue; no UIKit/compiler wait",@"manifest":warmPath.lastPathComponent?:@""};
+    return @{@"identity":@ICSM_PIPELINE_IDENTITY,@"loaded":@(warmLoaded),@"prewarm_ms":@(warmLoadMS),@"hits":@(warmHits),@"new_states":@(warmNew),@"failures":@(warmFailures),@"archive_hits":@(warmArchiveHits),@"archive_misses":@(warmArchiveMisses),@"saves":@(warmSaves.load()),@"records":@(warmRecords.count),@"dirty":@(warmDirty || warmRevision>warmSavedRevision.load()),@"save_pending":@(warmSavePending.load()),@"save_failures":@(warmSaveFailures.load()),@"save_worker_ms":@(warmSaveMS.load()),@"archive_bytes":@(warmArchiveBytes.load()),@"archive_limit_bytes":@(warmArchiveLimit),@"discarded_legacy_bytes":@(warmLegacyArchiveBytes),@"persistence":@"Fresh compact snapshot; live archive read-only; match checkpoints deferred",@"manifest":warmPath.lastPathComponent?:@""};
 }
 CON_COMMAND(icsm_metal_pipeline_save,"Checkpoint the actual device pipeline archive and immutable descriptors") {SourceMetalPipelineCheckpoint(true);}
 CON_COMMAND(icsm_metal_pipeline_stats,"Print actual prewarm/archive hit counters") {

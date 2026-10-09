@@ -2,6 +2,7 @@
    original IN_* handlers.  Native callbacks enqueue POD events only: the
    original client context applies edges and constructs CUserCmds. */
 
+#include "display_policy.h"
 namespace I5Touch
 {
 enum EventType { ActionEvent, MoveEvent, LookEvent, CommandEvent, WeaponEvent, ResetEvent };
@@ -45,6 +46,11 @@ static ConVar touch_input_debug( "touch_input_debug", "0", 0,
 
 // Original fps_max and fps_max_menu are not archived. Keep the UI choice in
 // an archived client ConVar and apply both original engine limiters.
+static bool s_qualityFrameLocked = false;
+static bool s_qualityFPSChanging = false;
+static bool s_qualityReady = false;
+static ConVar icsm_quality_unlocked_fps( "icsm_quality_unlocked_fps", "120", FCVAR_ARCHIVE,
+    "Last unlocked preset frame cap, restored when leaving very low.", true, 60, true, 120 );
 static void ApplyFrameRateLimit( int limit )
 {
     ConVarRef game( "fps_max", true ), menu( "fps_max_menu", true );
@@ -56,7 +62,12 @@ static void ApplyFrameRateLimit( int limit )
 
 static void FrameRateLimitChanged( IConVar *var, const char *, float )
 {
-    ApplyFrameRateLimit( static_cast<ConVar *>( var )->GetInt() );
+    ConVar *choice = static_cast<ConVar *>( var );
+    if ( s_qualityFPSChanging ) return;
+    if ( s_qualityFrameLocked && choice->GetInt() != 60 ) {
+        s_qualityFPSChanging = true; choice->SetValue( 60 ); s_qualityFPSChanging = false;
+    } else if ( s_qualityReady && !s_qualityFrameLocked ) icsm_quality_unlocked_fps.SetValue( choice->GetInt() );
+    ApplyFrameRateLimit( choice->GetInt() );
 }
 
 static ConVar icsm_fps_limit( "icsm_fps_limit", "120", FCVAR_ARCHIVE,
@@ -68,6 +79,8 @@ static void ApplyFrameRateLimitCommand( const CCommand & )
 }
 static ConCommand icsm_apply_fps_limit( "icsm_apply_fps_limit", ApplyFrameRateLimitCommand,
     "Apply the saved frame rate limit after startup configuration.", FCVAR_CLIENTCMD_CAN_EXECUTE );
+
+#include "video_quality_preset.inc"
 
 static kbutton_t *Button( int action )
 {
@@ -208,6 +221,428 @@ static bool GameplayAllowed( C_CSPlayer *player )
         !::input->CAM_InterceptingMouse();
 }
 
+static const char *s_navigationIDs[SourceNavigationActionCount] = {
+    "MainMenuNavBarHome", "MainMenuNavBarPlay", "MainMenuNavBarInventory",
+    "MainMenuNavBarSettings", "MainMenuNavBarConsole", "MainMenuNavBarRooms",
+    "MainMenuNavBarFPS", "MainMenuNavBarQuit"
+};
+
+static bool LobbyVisible( panorama::IUIPanel *root )
+{
+    // InitialDisplay is never cleared in this tree (see MainMenuReady).
+    // Use actual panel readiness rather than that legacy class.
+    return engine && !engine->IsInGame() &&
+        GameUI().GetGameUIState() == CSGO_GAME_UI_STATE_MAINMENU &&
+        root && root->BIsVisible() && root->BReadyForDisplay();
+}
+
+static bool NavigationAllowed( panorama::IUIPanel *root )
+{
+    return LobbyVisible( root ) && !root->BHasClass( "PopupBackgroundBlur" ) && !SourceTouchIsEditing();
+}
+
+static panorama::CPanelPtr<panorama::IUIPanel> s_menuBlurPanel;
+static int s_menuBlurSurfaceWidth = 0, s_menuBlurSurfaceHeight = 0;
+static float s_menuBlurScaleX = 0, s_menuBlurScaleY = 0;
+static float s_menuBlurParentX = 0, s_menuBlurParentY = 0;
+static float s_menuContentScale = 0;
+static unsigned s_menuBlurLayoutUpdates = 0;
+
+static void UpdateMenuBlurViewport( panorama::IUIPanel *root )
+{
+    if ( !root || !root->BIsVisible() || !root->BReadyForDisplay() || !root->GetParentWindow() ) return;
+    panorama::IUIPanel *mask = root->FindChildTraverse( "ICSMMenuBlur" );
+    panorama::IUIPanel *parent = mask ? mask->GetParent() : NULL;
+    if ( !parent ) return;
+    const int width = root->GetParentWindow()->GetSurfaceWidth();
+    const int height = root->GetParentWindow()->GetSurfaceHeight();
+    const float scaleX = parent->GetActualUIScaleX(), scaleY = parent->GetActualUIScaleY();
+    if ( width <= 0 || height <= 0 || scaleX <= 0 || scaleY <= 0 ) return;
+    float parentX = 0, parentY = 0;
+    for ( panorama::IUIPanel *p = parent; p; p = p->GetParent() )
+    {
+        if ( p->GetActualXOffset() == FLT_MAX || p->GetActualYOffset() == FLT_MAX ) return;
+        parentX += p->GetActualXOffset();parentY += p->GetActualYOffset();
+        if ( p->GetParent() )
+        {
+            parentX -= p->GetParent()->GetContentsXScrollOffset();
+            parentY -= p->GetParent()->GetContentsYScrollOffset();
+        }
+    }
+    if ( !IsFinite( parentX ) || !IsFinite( parentY ) ) return;
+    if ( s_menuBlurPanel.Get() == mask && s_menuBlurSurfaceWidth == width && s_menuBlurSurfaceHeight == height &&
+        s_menuBlurScaleX == scaleX && s_menuBlurScaleY == scaleY &&
+        s_menuBlurParentX == parentX && s_menuBlurParentY == parentY &&
+        s_menuContentScale == SourceTouchMenuUIScale() ) return;
+
+    // Work in the window surface, not percentage widths of a clipped content
+    // panel. Extend one surface pixel past every outward-rounded edge, so
+    // UI-scale rounding and the rasterizer cannot leave a clear final column.
+    const float x = floorf( -parentX ) - 1, y = floorf( -parentY ) - 1;
+    const float pixelWidth = ceilf( float( width ) - parentX ) + 1 - x;
+    const float pixelHeight = ceilf( float( height ) - parentY ) + 1 - y;
+    panorama::IUIPanelStyle *style = mask->AccessIUIStyleDirty();
+    const panorama::CUILength::EUILengthTypes pixels = panorama::CUILength::k_EUILengthLength;
+    // A collapsed mask has no actual UI scale yet. Supply logical lengths
+    // using its laid-out parent, rather than reversing the mask's unset scale.
+    style->SetPositionWithoutTransition( panorama::CUILength( x / scaleX, pixels ), panorama::CUILength( y / scaleY, pixels ),
+        panorama::CUILength( 0, pixels ), false );
+    style->SetWidthWithoutTransition( panorama::CUILength( pixelWidth / scaleX, pixels ) );
+    style->SetHeightWithoutTransition( panorama::CUILength( pixelHeight / scaleY, pixels ) );
+    // A 100% height plus bottom margin does not shrink an absolute panel.
+    // Reserve the navigation row in its actual height so page footers (the
+    // play/start and inventory/confirm controls) remain above the glass.
+    panorama::IUIPanel *content = root->FindChildTraverse( "JsMainMenuContent" );
+    if ( content )
+    {
+        const float menuScale = SourceTouchMenuUIScale();
+        const float contentPixels = MAX( 0.0f, float( height ) - parentY - 192.0f * scaleY );
+        panorama::IUIPanelStyle *contentStyle = content->AccessIUIStyleDirty();
+        // Source's ui-scale operates at layout/font level. Compensate the
+        // logical viewport so only its contents shrink, while the page and
+        // shared blur still cover the same screen rectangle. Actual panel
+        // rectangles keep the native map/settings touch overlays aligned.
+        contentStyle->SetUIScale( Vector( menuScale, menuScale, menuScale ) );
+        contentStyle->SetWidthWithoutTransition( panorama::CUILength( ( float( width ) - parentX ) / ( scaleX * menuScale ), pixels ) );
+        contentStyle->SetHeightWithoutTransition( panorama::CUILength( contentPixels / ( scaleY * menuScale ), pixels ) );
+    }
+    s_menuBlurPanel = mask;s_menuBlurSurfaceWidth = width;s_menuBlurSurfaceHeight = height;
+    s_menuBlurScaleX = scaleX;s_menuBlurScaleY = scaleY;s_menuBlurParentX = parentX;s_menuBlurParentY = parentY;
+    s_menuContentScale = SourceTouchMenuUIScale();
+    ++s_menuBlurLayoutUpdates;
+    Msg( "ICSM_MENU_BLUR_VIEWPORT surface=%dx%d ui_scale=%g,%g parent=%g,%g mask_pixels=%g,%g,%g,%g updates=%u\n",
+        width, height, scaleX, scaleY, parentX, parentY, x, y, pixelWidth, pixelHeight, s_menuBlurLayoutUpdates );
+}
+
+static void NavigationCallback( SourceTouchNavigationAction action )
+{
+    if ( action <= SourceNavigationHome || action >= SourceNavigationQuit || !s_initialized ) return;
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !NavigationAllowed( root ) ) return;
+    panorama::IUIPanel *button = root->FindChildTraverse( s_navigationIDs[action] );
+    if ( !button || !button->BIsVisible() || !button->IsEnabled() ) return;
+    // With the home glyph removed, reselecting an open page uses the original
+    // home radio's handler to close it and restore lobby music/selection.
+    if ( action >= SourceNavigationPlay && action <= SourceNavigationSettings &&
+        ( button->GetStyleFlags() & panorama::k_EStyleFlagSelected ) )
+    {
+        panorama::IUIPanel *home = root->FindChildTraverse( "MainMenuNavBarHome" );
+        if ( home ) button = home;
+    }
+    // Use the same Activated event as CUIWindowInput::OnMouseButtonUp. This
+    // retains radio selection, XML onactivate handlers and quit confirmation.
+    panorama::DispatchEventAsync( 0.0f, panorama::Activated(), button->ClientPtr(), panorama::k_ePanelEventSourceMouse );
+    Msg( "ICSM_GLASS_NAV activate=%s\n", s_navigationIDs[action] );
+}
+
+
+static void ProfileCallback()
+{
+    if ( !s_initialized ) return;
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !NavigationAllowed( root ) ) return;
+    panorama::IUIPanel *button = root->FindChildTraverse( "ICSMProfile" );
+    if ( !button || !button->BIsVisible() || !button->IsEnabled() ) return;
+    // Retain the original XML handler and native name editor/save path.
+    panorama::DispatchEventAsync( 0.0f, panorama::Activated(), button->ClientPtr(), panorama::k_ePanelEventSourceMouse );
+    Msg( "ICSM_GLASS_PROFILE activate=ICSMProfile\n" );
+}
+
+static panorama::IUIPanel *ActiveMapContainer()
+{
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !NavigationAllowed( root ) || SourceTouchConsoleIsVisible() ) return NULL;
+    panorama::IUIPanel *play = root->FindChildTraverse( "MainMenuNavBarPlay" );
+    if ( !play || !( play->GetStyleFlags() & panorama::k_EStyleFlagSelected ) ) return NULL;
+    // Original drop-down menus are separate floating panels. Let their
+    // original pointer route receive touches while any play menu is open.
+    const char *dropdowns[] = { "PlayTopNavDropdown", "BotDifficultyDropdown", "TournamentTeamDropdown", "TournamentStageDropdown" };
+    for ( unsigned i = 0; i < ARRAYSIZE( dropdowns ); ++i )
+    {
+        panorama::IUIPanel *p = root->FindChildTraverse( dropdowns[i] );
+        if ( p && p->BHasClass( "DropDownMenuVisible" ) ) return NULL;
+    }
+    panorama::IUIPanel *list = root->FindChildTraverse( "MapSelectionList" );
+    const char *id = list ? list->GetAttribute( "icsm-active-map-container", "" ) : "";
+    panorama::IUIPanel *pane = id[0] ? list->FindChildTraverse( id ) : NULL;
+    return pane && pane->BIsVisible() && pane->IsEnabled() && !pane->BHasClass( "hidden" ) ? pane : NULL;
+}
+
+static void MapScrollCallback( float pixels )
+{
+    panorama::IUIPanel *pane = s_initialized ? ActiveMapContainer() : NULL;
+    if ( !pane || !IsFinite( pixels ) || !pane->GetParentWindow() ) return;
+    panorama::IUIScrollBar *scroll = pane->GetHorizontalScrollBar();
+    int width = 0, height = 0;engine->GetScreenSize( width, height );
+    if ( scroll && width > 0 )
+        scroll->SetScrollWindowPosition( pixels * pane->GetParentWindow()->GetSurfaceWidth() / width, true );
+}
+
+static void MapActivateCallback( const char *id )
+{
+    panorama::IUIPanel *pane = s_initialized ? ActiveMapContainer() : NULL;
+    panorama::IUIPanel *tile = pane && id ? pane->FindChildTraverse( id ) : NULL;
+    if ( !tile || !tile->BIsVisible() || !tile->IsEnabled() || !tile->BHasClass( "map-selection-btn" ) ) return;
+    // Use the original radio/toggle and its original onactivate handler.
+    panorama::DispatchEventAsync( 0.0f, panorama::Activated(), tile->ClientPtr(), panorama::k_ePanelEventSourceMouse );
+    Msg( "ICSM_MAP_GALLERY activate=%s map=%s\n", id, tile->GetAttribute( "mapname", "" ) );
+}
+
+static SourceTouchRect MapPanelRect( panorama::IUIPanel *panel, int width, int height )
+{
+    SourceTouchRect r = {};
+    if ( !panel || !panel->GetParentWindow() || !panel->BIsVisible() ) return r;
+    const float surfaceW = panel->GetParentWindow()->GetSurfaceWidth();
+    const float surfaceH = panel->GetParentWindow()->GetSurfaceHeight();
+    if ( surfaceW <= 0 || surfaceH <= 0 ) return r;
+    float x = 0, y = 0;
+    for ( panorama::IUIPanel *p = panel; p; p = p->GetParent() )
+    {
+        if ( p->GetActualXOffset() == FLT_MAX || p->GetActualYOffset() == FLT_MAX ) return r;
+        x += p->GetActualXOffset();y += p->GetActualYOffset();
+        if ( p->GetParent() )
+        {
+            // Source stores content scroll offsets as NEGATIVE positions
+            // (CUIPanel::CalculateScrollBarPosition), matching PaintTraverse.
+            x += p->GetParent()->GetContentsXScrollOffset();
+            y += p->GetParent()->GetContentsYScrollOffset();
+        }
+    }
+    r.x = x * width / surfaceW;r.y = y * height / surfaceH;
+    r.width = panel->GetActualLayoutWidth() * width / surfaceW;
+    r.height = panel->GetActualLayoutHeight() * height / surfaceH;
+    if ( !IsFinite( r.x ) || !IsFinite( r.y ) || !IsFinite( r.width ) || !IsFinite( r.height ) ) return SourceTouchRect();
+    return r;
+}
+
+static void PublishMaps( int width, int height )
+{
+    SourceTouchMapState maps = {};
+    maps.struct_size = sizeof( maps );maps.render_width = float( width );maps.render_height = float( height );
+    panorama::IUIPanel *pane = ActiveMapContainer();
+    if ( pane && width > 0 && height > 0 && pane->GetParentWindow() )
+    {
+        maps.viewport = MapPanelRect( pane, width, height );
+        const float units = width / float( pane->GetParentWindow()->GetSurfaceWidth() );
+        const float actualScroll = -pane->GetContentsXScrollOffset() * units;
+        panorama::IUIScrollBar *scroll = pane->GetHorizontalScrollBar();
+        // An immediate native drag invalidates the next Source layout. Keep
+        // UIKit at that requested position when the finger is released,
+        // while using the actual painted offset for tile content bounds.
+        maps.scroll_offset = scroll && scroll->BLastMoveImmediate() ? scroll->GetScrollWindowPosition() * units : actualScroll;
+        maps.content_width = scroll ? scroll->GetRangeMax() * units : maps.viewport.width;
+        V_strncpy( maps.container_id, pane->GetID(), sizeof( maps.container_id ) );
+        CUtlVector<panorama::IUIPanel *> tiles;
+        pane->FindChildrenWithClassTraverse( "map-selection-btn", tiles );
+        for ( int i = 0; i < tiles.Count() && maps.tile_count < SOURCE_MAP_TILE_LIMIT; ++i )
+        {
+            panorama::IUIPanel *p = tiles[i];
+            SourceTouchRect r = MapPanelRect( p, width, height );
+            if ( r.width <= 0 || r.height <= 0 || r.width >= FLT_MAX || r.height >= FLT_MAX ) continue;
+            SourceTouchMapTile &tile = maps.tiles[maps.tile_count++];
+            r.x += actualScroll - maps.viewport.x;r.y -= maps.viewport.y;tile.bounds = r;
+            tile.enabled = p->IsEnabled();tile.selected = ( p->GetStyleFlags() & panorama::k_EStyleFlagSelected ) != 0;
+            V_strncpy( tile.panel_id, p->GetID(), sizeof( tile.panel_id ) );
+            V_strncpy( tile.map_name, p->GetAttribute( "mapname", "" ), sizeof( tile.map_name ) );
+        }
+        maps.visible = maps.tile_count > 0 && maps.viewport.width > 0 && maps.viewport.height > 0;
+    }
+    SourceTouchUpdateMaps( &maps );
+}
+
+static panorama::IUIPanel *ActiveSettingsViewport()
+{
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !NavigationAllowed( root ) || SourceTouchConsoleIsVisible() ) return NULL;
+    panorama::IUIPanel *button = root->FindChildTraverse( "MainMenuNavBarSettings" );
+    if ( !button || !( button->GetStyleFlags() & panorama::k_EStyleFlagSelected ) ) return NULL;
+    panorama::IUIPanel *content = root->FindChildTraverse( "SettingsMenuContent" );
+    const char *id = content ? content->GetAttribute( "icsm-active-settings-tab", "" ) : "";
+    panorama::IUIPanel *tab = *id ? content->FindChildTraverse( id ) : NULL;
+    if ( !tab || !tab->BIsVisible() || !tab->BHasClass( "Active" ) ) return NULL;
+    // Floating Source menus must receive their original pointer events.
+    CUtlVector<panorama::IUIPanel *> dropdowns;
+    tab->FindChildrenWithClassTraverse( "DropDownMenuVisible", dropdowns );
+    if ( dropdowns.Count() ) return NULL;
+    return tab->FindChildTraverse( "ICSMSettingsScrollViewport" );
+}
+
+static void SettingsScrollCallback( const char *tabID, float pixels )
+{
+    panorama::IUIPanel *pane = s_initialized ? ActiveSettingsViewport() : NULL;
+    if ( !pane || !pane->GetParent() || V_strcmp( pane->GetParent()->GetID(), tabID ) ||
+         !IsFinite( pixels ) || !pane->GetParentWindow() ) return;
+    int width = 0, height = 0;engine->GetScreenSize( width, height );
+    panorama::IUIScrollBar *scroll = pane->GetVerticalScrollBar();
+    if ( scroll && height > 0 )
+        scroll->SetScrollWindowPosition( pixels * pane->GetParentWindow()->GetSurfaceHeight() / height, true );
+}
+
+static void PublishSettingsSliders( panorama::IUIPanel *panel, SourceTouchSettingsState &settings, int width, int height )
+{
+    if ( !panel || !panel->BIsVisible() || !panel->IsEnabled() ) return;
+    if ( !V_strcmp( panel->GetPanelType().String(), "CSGOSettingsSlider" ) && settings.slider_count < SOURCE_SETTINGS_SLIDER_LIMIT )
+    {
+        SourceTouchRect rect = MapPanelRect( panel, width, height );
+        if ( rect.width > 0 && rect.height > 0 ) settings.sliders[settings.slider_count++] = rect;
+    }
+    for ( int i = 0; i < panel->GetChildCount(); ++i ) PublishSettingsSliders( panel->GetChild( i ), settings, width, height );
+}
+
+static void PublishSettings( int width, int height )
+{
+    SourceTouchSettingsState settings = {};
+    settings.struct_size = sizeof( settings );settings.render_width = float( width );settings.render_height = float( height );
+    panorama::IUIPanel *pane = ActiveSettingsViewport();
+    if ( pane && pane->BIsVisible() && pane->IsEnabled() && pane->GetParentWindow() && width > 0 && height > 0 )
+    {
+        settings.viewport = MapPanelRect( pane, width, height );
+        const float units = height / float( pane->GetParentWindow()->GetSurfaceHeight() );
+        panorama::IUIScrollBar *scroll = pane->GetVerticalScrollBar();
+        settings.scroll_offset = scroll && scroll->BLastMoveImmediate() ? scroll->GetScrollWindowPosition() * units : -pane->GetContentsYScrollOffset() * units;
+        settings.content_height = scroll ? scroll->GetRangeMax() * units : settings.viewport.height;
+        V_strncpy( settings.tab_id, pane->GetParent()->GetID(), sizeof( settings.tab_id ) );
+        PublishSettingsSliders( pane, settings, width, height );
+        settings.visible = settings.viewport.width > 0 && settings.viewport.height > 0;
+    }
+    SourceTouchUpdateSettings( &settings );
+}
+
+static void PublishConsoleBlur( int width, int height )
+{
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !root ) return;
+    SourceTouchConsoleState console = {};
+    const bool show = SourceTouchGetConsoleState( &console );
+    root->SetHasClass( "icsm-console-open", show );
+    // UIKit owns the complete rounded frosted console. Keep the old marker
+    // hidden so a rectangular Source fill cannot protrude from its corners.
+    panorama::IUIPanel *panel = root->FindChildTraverse( "ICSMConsoleBlurTarget" );
+    if ( panel ) panel->SetHasClass( "hidden", true );
+}
+
+static panorama::IUIPanel *InventoryPanel()
+{
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !NavigationAllowed( root ) ) return NULL;
+    panorama::IUIPanel *button = root->FindChildTraverse( "MainMenuNavBarInventory" );
+    panorama::IUIPanel *inventory = root->FindChildTraverse( "JsInventory" );
+    return button && ( button->GetStyleFlags() & panorama::k_EStyleFlagSelected ) &&
+        inventory && inventory->BIsVisible() && inventory->BReadyForDisplay() ? inventory : NULL;
+}
+
+static void InventoryCallback( const char *id )
+{
+    panorama::IUIPanel *inventory = s_initialized && !SourceTouchConsoleIsVisible() ? InventoryPanel() : NULL;
+    if ( !inventory || !id || V_strncmp( id, "Offline", 7 ) ) return;
+    panorama::IUIPanel *button = inventory->FindChildTraverse( id );
+    if ( !button || !button->IsEnabled() ) return;
+    panorama::DispatchEventAsync( 0.0f, panorama::Activated(), button->ClientPtr(), panorama::k_ePanelEventSourceMouse );
+    Msg( "ICSM_GLASS_INVENTORY activate=%s\n", id );
+}
+
+static void PublishInventory()
+{
+    panorama::IUIPanel *inventory = InventoryPanel();
+    const char *state = inventory ? inventory->GetAttribute( "icsm-inventory-state", "" ) : "";
+    const bool mounted = SourceTouchUpdateInventory( state, inventory != NULL );
+    // Keep Source's handlers and data alive. A mounted native page supplies
+    // all drawing; the console can hide it without revealing the old grid.
+    if ( inventory ) inventory->SetHasClass( "icsm-native-inventory", mounted );
+}
+
+static panorama::CPanelPtr<panorama::IUIPanel> s_navigationLayoutRoot;
+static int s_navigationLayoutWidth = 0, s_navigationLayoutHeight = 0;
+static float s_navigationLayoutScaleX = 0, s_navigationLayoutScaleY = 0;
+static bool s_navigationWasVisible = false;
+static void SynchronizeNavigationLayout( panorama::IUIPanel *root, bool visible )
+{
+    const bool returning = visible && !s_navigationWasVisible;
+    s_navigationWasVisible = visible;
+    if ( !visible || !root || !root->GetParentWindow() ) return;
+    const int width = root->GetParentWindow()->GetSurfaceWidth(), height = root->GetParentWindow()->GetSurfaceHeight();
+    const float scaleX = root->GetActualUIScaleX(), scaleY = root->GetActualUIScaleY();
+    if ( !returning && s_navigationLayoutRoot.Get() == root && width == s_navigationLayoutWidth &&
+        height == s_navigationLayoutHeight && scaleX == s_navigationLayoutScaleX && scaleY == s_navigationLayoutScaleY ) return;
+    if ( width <= 0 || height <= 0 || scaleX <= 0 || scaleY <= 0 ) return;
+    // CUIPanel::OnContentSizeTraverse skips opacity-zero panels. The native
+    // toolbar keeps Source's original panels transparent, so their measured
+    // bounds otherwise remain at the previous video mode after a resize.
+    // Measure/layout these three explicit-size panels through Source's public
+    // layout API only on geometry changes or when returning to the lobby.
+    const char *ids[] = { "MainMenuNavBarLeft", "MainMenuNavBarRight", "ICSMProfile" };
+    for ( unsigned i = 0; i < ARRAYSIZE(ids); ++i ) {
+        panorama::IUIPanel *panel = root->FindChildTraverse( ids[i] );
+        panorama::IUIPanel *parent = panel ? panel->GetParent() : NULL;
+        if ( !parent || parent->GetActualLayoutWidth() <= 0 || parent->GetActualLayoutHeight() <= 0 ) continue;
+        panel->InvalidateSizeAndPosition();
+        panel->DesiredLayoutSizeTraverse( parent->GetActualLayoutWidth(), parent->GetActualLayoutHeight() );
+        panel->LayoutTraverse( 0, 0, parent->GetActualLayoutWidth(), parent->GetActualLayoutHeight() );
+    }
+    s_navigationLayoutRoot = root;s_navigationLayoutWidth = width;s_navigationLayoutHeight = height;
+    s_navigationLayoutScaleX = scaleX;s_navigationLayoutScaleY = scaleY;
+    Msg( "ICSM_NAVIGATION_LAYOUT surface=%dx%d scale=%g,%g\n", width, height, scaleX, scaleY );
+}
+
+static void PublishNavigation( int width, int height )
+{
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    UpdateMenuBlurViewport( root );
+    SourceTouchNavigationState navigation = {};
+    navigation.struct_size = sizeof( navigation );
+    navigation.render_width = float( width );
+    navigation.render_height = float( height );
+    navigation.visible = NavigationAllowed( root );
+    SynchronizeNavigationLayout( root, navigation.visible );
+    // The title strip is removed in Source's layout and is not mounted in
+    // UIKit either. Retain the shared state structure for the existing ABI.
+    navigation.title_visible = false;
+    if ( navigation.visible && width > 0 && height > 0 )
+    {
+        navigation.bar = PanelRect( root->FindChildTraverse( "MainMenuNavBarLeft" ), width, height );
+        navigation.bar_right = PanelRect( root->FindChildTraverse( "MainMenuNavBarRight" ), width, height );
+        for ( int i = SourceNavigationPlay; i <= SourceNavigationFPS; ++i )
+        {
+            panorama::IUIPanel *button = root->FindChildTraverse( s_navigationIDs[i] );
+            if ( !button || !button->BIsVisible() ) continue;
+            navigation.buttons[i] = PanelRect( button, width, height );
+            if ( button->IsEnabled() ) navigation.enabled_mask |= 1u << i;
+            if ( button->GetStyleFlags() & panorama::k_EStyleFlagSelected ) navigation.selected_mask |= 1u << i;
+        }
+        ConVarRef fps( "net_graph", true );
+        navigation.fps_enabled = fps.IsValid() && fps.GetInt() > 0;
+        panorama::IUIPanel *profile = root->FindChildTraverse( "ICSMProfile" );
+        if ( profile && profile->BIsVisible() )
+        {
+            navigation.profile = PanelRect( profile, width, height );
+            navigation.profile_visible = navigation.profile.width > 0 && navigation.profile.height > 0;
+            navigation.profile_enabled = profile->IsEnabled();
+            ConVarRef name( "name", true );
+            V_strncpy( navigation.profile_name_utf8, name.IsValid() ? name.GetString() : "", sizeof( navigation.profile_name_utf8 ) );
+        }
+    }
+    const uint32_t mounted = SourceTouchUpdateNavigation( &navigation );
+    // Keep the original buttons laid out, so every resolution uses the same
+    // authoritative rectangles. The pause bar and unsupported hosts retain
+    // their original drawing; only a mounted native lobby bar hides it.
+    if ( root )
+    {
+        const uint32_t frostedPages = ( 1u << SourceNavigationPlay ) | ( 1u << SourceNavigationSettings );
+        root->SetHasClass( "icsm-neutral-frost", navigation.visible &&
+            ( navigation.selected_mask & frostedPages ) != 0 && !SourceTouchConsoleIsVisible() );
+        root->SetHasClass( "icsm-native-glass-nav", ( mounted & SourceGlassNavigation ) != 0 );
+        root->SetHasClass( "icsm-native-glass-title", ( mounted & SourceGlassTitle ) != 0 );
+        root->SetHasClass( "icsm-native-glass-profile", ( mounted & SourceGlassProfile ) != 0 );
+    }
+}
+
 static void PublishState()
 {
     if ( !s_initialized || !engine ) return;
@@ -243,6 +678,11 @@ static void PublishState()
     engine->GetScreenSize( width, height );
     state.render_width = float( width );
     state.render_height = float( height );
+    PublishNavigation( width, height );
+    PublishMaps( width, height );
+    PublishSettings( width, height );
+    PublishConsoleBlur( width, height );
+    PublishInventory();
     // These physical values are the verified target M5 iPad panel.  The native
     // module converts physical layout through current UIKit view dimensions.
     state.native_landscape_width_pixels = 2420.0f;
@@ -535,6 +975,78 @@ static void DiagnosticCommand( const CCommand & )
 static ConCommand i5_touch_state( "i5_touch_state", DiagnosticCommand,
     "Report actual native touch input, original CUserCmd and HUD anchors.", FCVAR_CLIENTCMD_CAN_EXECUTE );
 
+// Local UI validation goes through the actual Panorama handlers, without
+// synthesising UIKit touches or accepting arbitrary JavaScript from a server.
+static bool SettingsDiagnosticToken( const char *text )
+{
+    if ( !text || !*text || V_strlen( text ) > 64 ) return false;
+    for ( const char *p = text; *p; ++p )
+        if ( !( ( *p >= 'a' && *p <= 'z' ) || ( *p >= 'A' && *p <= 'Z' ) ||
+                ( *p >= '0' && *p <= '9' ) || *p == '_' || *p == '-' || *p == '.' ) ) return false;
+    return true;
+}
+
+static void SettingsDiagnosticCommand( const CCommand &args )
+{
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !root || !s_initialized || !NavigationAllowed( root ) ) return;
+    if ( args.ArgC() == 2 && !V_strcmp( args[1], "open" ) )
+    {
+        panorama::IUIPanel *button = root->FindChildTraverse( "MainMenuNavBarSettings" );
+        if ( button ) panorama::DispatchEventAsync( 0, panorama::Activated(), button->ClientPtr(), panorama::k_ePanelEventSourceMouse );
+        return;
+    }
+    panorama::IUIPanel *settings = root->FindChildTraverse( "JsSettings" );
+    if ( !settings || args.ArgC() < 2 || args.ArgC() > 4 ) return;
+    for ( int i = 1; i < args.ArgC(); ++i ) if ( !SettingsDiagnosticToken( args[i] ) ) return;
+    char script[512];
+    V_snprintf( script, sizeof( script ), "SettingsMenu.ValidateUI('%s','%s','%s');", args[1],
+        args.ArgC() > 2 ? args[2] : "", args.ArgC() > 3 ? args[3] : "" );
+    panorama::UIEngine()->RunScript( settings, script, "icsm_settings_validation", 1, 1, false, false );
+}
+static ConCommand i5_settings_ui( "i5_settings_ui", SettingsDiagnosticCommand,
+    "Local settings validation: open, tab <id>, select <id> <option>, slider <id> <value>, activate <id>, state.", FCVAR_DONTRECORD );
+
+static void InventoryDiagnosticCommand( const CCommand &args )
+{
+    CCSGO_MainMenu *menu = CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root = menu ? menu->UIPanel() : NULL;
+    if ( !root || !s_initialized || !NavigationAllowed( root ) || args.ArgC() < 2 || args.ArgC() > 3 ) return;
+    if ( args.ArgC() == 2 && !V_strcmp( args[1], "open" ) )
+    {
+        panorama::IUIPanel *button = root->FindChildTraverse( "MainMenuNavBarInventory" );
+        if ( button ) panorama::DispatchEventAsync( 0, panorama::Activated(), button->ClientPtr(), panorama::k_ePanelEventSourceMouse );
+        return;
+    }
+    panorama::IUIPanel *inventory = root->FindChildTraverse( "JsInventory" );
+    if ( !inventory ) return;
+    for ( int i = 1; i < args.ArgC(); ++i ) if ( !SettingsDiagnosticToken( args[i] ) ) return;
+    char script[256];
+    V_snprintf( script, sizeof( script ), "OfflineInventory.ValidateUI('%s','%s');", args[1], args.ArgC() > 2 ? args[2] : "" );
+    panorama::UIEngine()->RunScript( inventory, script, "icsm_inventory_validation", 1, 1, false, false );
+}
+static ConCommand i5_inventory_ui( "i5_inventory_ui", InventoryDiagnosticCommand,
+    "Local inventory validation: open, activate <panel id>, state.", FCVAR_DONTRECORD );
+
+static void SettingsScrollDiagnosticCommand( const CCommand &args )
+{
+    if ( !s_initialized ) return;
+    if ( args.ArgC() == 2 && !V_strcmp( args[1], "test" ) )
+    {
+        char json[4096];
+        if ( SourceTouchSettingsScrollSelfTestJSON( json, sizeof( json ) ) ) Msg( "ICSM_SETTINGS_SCROLL_TEST %s\n", json );
+    }
+    else if ( args.ArgC() >= 2 && args.ArgC() <= 3 && SettingsDiagnosticToken( args[1] ) )
+    {
+        float offset = V_atof( args[1] );
+        if ( IsFinite( offset ) && SourceTouchSettingsScrollTo( offset, args.ArgC() == 3 && !V_strcmp( args[2], "1" ) ) )
+            Msg( "ICSM_SETTINGS_SCROLL requested_pixels=%g\n", offset );
+    }
+}
+static ConCommand i5_settings_scroll( "i5_settings_scroll", SettingsScrollDiagnosticCommand,
+    "Local UIKit settings scroll validation: <pixels> [1=animated], or test. Never synthesises UITouch.", FCVAR_DONTRECORD );
+
 static void LayoutEditorCommand( const CCommand & )
 {
     ReleaseGameActions();
@@ -561,6 +1073,29 @@ static void PlayerNameCommand(const CCommand &)
 static ConCommand i5_player_name("i5_player_name", PlayerNameCommand,
     "Open the native player name editor.", FCVAR_CLIENTCMD_CAN_EXECUTE);
 
+static void ExportErrorLogsCommand(const CCommand &) {
+    ReleaseGameActions();
+    SourceTouchExportErrorLogs();
+}
+static ConCommand icsm_export_logs("icsm_export_logs", ExportErrorLogsCommand,
+    "Export recent diagnostic logs through the iOS share sheet.", FCVAR_CLIENTCMD_CAN_EXECUTE);
+
+static void JoinRoom(const char *endpoint,const char *roomPassword)
+{
+    // Password is convar data, never console text. The browser validates the
+    // address and resolves it to IPv4 before offering a join action.
+    if(!endpoint || !*endpoint)return;
+    ConVarRef password("password");
+    if(password.IsValid())password.SetValue(roomPassword?roomPassword:"");
+    if(engine)engine->ClientCmd_Unrestricted(CFmtStr("connect %s\n",endpoint));
+}
+static void RoomBrowserCommand(const CCommand &)
+{
+    ReleaseGameActions();SourceTouchOpenRoomBrowser(JoinRoom);
+}
+static ConCommand icsm_room_browser("icsm_room_browser",RoomBrowserCommand,
+    "Search private rooms on LAN or saved Internet addresses.",FCVAR_CLIENTCMD_CAN_EXECUTE);
+
 static void Initialize()
 {
     SourceTouchCallbacks callbacks = {};
@@ -574,6 +1109,11 @@ static void Initialize()
     callbacks.frame = FrameCallback;
     s_initialized = true;
     SourceTouchSetCallbacks( &callbacks, NULL );
+    SourceTouchSetNavigationCallback( NavigationCallback );
+    SourceTouchSetProfileCallback( ProfileCallback );
+    SourceTouchSetMapCallbacks( MapScrollCallback, MapActivateCallback );
+    SourceTouchSetSettingsScrollCallback( SettingsScrollCallback );
+    SourceTouchSetInventoryCallback( InventoryCallback );
     Msg( "I5_TOUCH client ready: float ordered samples, linear gain, no acceleration\n" );
 }
 
@@ -590,6 +1130,17 @@ static void Shutdown()
     state.struct_size = sizeof( state );
     SourceTouchUpdateState( &state );
     SourceTouchSetCallbacks( NULL, NULL );
+    SourceTouchSetNavigationCallback( NULL );
+    SourceTouchSetProfileCallback( NULL );
+    SourceTouchSetMapCallbacks( NULL, NULL );
+    SourceTouchSetSettingsScrollCallback( NULL );
+    SourceTouchSetInventoryCallback( NULL );
+    SourceTouchUpdateInventory( "", false );
+    SourceTouchMapState maps = {};maps.struct_size = sizeof( maps );SourceTouchUpdateMaps( &maps );
+    SourceTouchSettingsState settings = {};settings.struct_size = sizeof( settings );SourceTouchUpdateSettings( &settings );
+    SourceTouchNavigationState navigation = {};
+    navigation.struct_size = sizeof( navigation );
+    SourceTouchUpdateNavigation( &navigation );
     s_initialized = false;
     s_read = s_write = s_lookCount = 0;
 }
@@ -613,7 +1164,13 @@ extern "C" SOURCE_TOUCH_API bool SourceTouchSynchronizeVideoSettings()
     const bool loaded = UpdateVideoConfigConVars();
     if ( loaded ) Msg( "ICSM_VIDEO_SETTINGS_SYNC client restart/optionsui values loaded from saved video config\n" );
     I5Touch::ApplyFrameRateLimit( I5Touch::icsm_fps_limit.GetInt() );
+    if ( loaded ) { I5Touch::s_qualityReady = true; I5Touch::ApplyQualityPreset(); }
     return loaded;
+}
+
+extern "C" SOURCE_TOUCH_API bool SourceTouchQualityManagesResolution()
+{
+    return I5Touch::s_qualityReady;
 }
 
 extern "C" SOURCE_TOUCH_API size_t SourceTouchVideoStateJSON(char *buffer,size_t capacity)
@@ -624,9 +1181,41 @@ extern "C" SOURCE_TOUCH_API size_t SourceTouchVideoStateJSON(char *buffer,size_t
         ConVarRef ref(names[i]);if(!ref.IsValid())return 0;values[i]=ref.GetFloat();
     }
     const MaterialSystem_Config_t &config=materials->GetCurrentConfigForVideoCard();
-    int length=V_snprintf(buffer,capacity,"{\"fps_max\":%g,\"fps_max_menu\":%g,\"mat_powersavingsmode\":%g,\"cpu_level\":%g,\"gpu_level\":%g,\"gpu_mem_level\":%g,\"csm_quality_level\":%g,\"mat_vsync\":%g,\"scene_render_percent\":%g,\"fps_limit\":%g,\"metal_spatial_upscale\":%g,\"fullscreen\":%s,\"borderless\":%s,\"fullscreen_locked\":true}",
+    CCSGO_MainMenu *menu=CCSGO_MainMenu::GetInstance();
+    panorama::IUIPanel *root=menu?menu->UIPanel():NULL;
+    int width=0,height=0;if(engine)engine->GetScreenSize(width,height);
+    panorama::IUIPanel *blur=root?root->FindChildTraverse("ICSMMenuBlur"):NULL;
+    bool open=blur && blur->BIsVisible() && !blur->BHasClass("hidden");
+    // Collapsed panels keep uninitialized offsets until their first layout.
+    // Do not serialize those as non-finite JSON numbers while the menu is shut.
+    auto laidOutRect=[width,height](panorama::IUIPanel *panel) -> SourceTouchRect {
+        SourceTouchRect empty={};
+        if(!panel || panel->GetActualLayoutWidth()<=0 || panel->GetActualLayoutHeight()<=0 ||
+            panel->GetActualUIScaleX()<=0 || panel->GetActualUIScaleY()<=0)return empty;
+        for(panorama::IUIPanel *p=panel;p;p=p->GetParent())
+            if(p->GetActualXOffset()==FLT_MAX || p->GetActualYOffset()==FLT_MAX)return empty;
+        SourceTouchRect rect=I5Touch::PanelRect(panel,width,height);
+        return IsFinite(rect.x) && IsFinite(rect.y) && IsFinite(rect.width) && IsFinite(rect.height)?rect:empty;
+    };
+    SourceTouchRect mask=open?laidOutRect(blur):SourceTouchRect{};
+    SourceTouchRect target=open?laidOutRect(root->FindChildTraverse("mainmenu-content__blur-target")):SourceTouchRect{};
+    SourceTouchRect background=laidOutRect(root?root->FindChildTraverse("MainMenuBackground"):NULL);
+    SourceTouchRect content=open?laidOutRect(root->FindChildTraverse("JsMainMenuContent")):SourceTouchRect{};
+    SourceTouchRect playStart=open?laidOutRect(root->FindChildTraverse("StartMatchBtn")):SourceTouchRect{};
+    bool covers=open && target.x<=0 && target.y<=0 && target.x+target.width>=width && target.y+target.height>=height;
+    const char *blurEffect = root && root->BHasClass( "icsm-neutral-frost" ) ?
+        "Source fastgaussian(10,10,3) / desaturated lobby" : "Source fastgaussian(8,8,3)";
+    int length=V_snprintf(buffer,capacity,"{\"fps_max\":%g,\"fps_max_menu\":%g,\"mat_powersavingsmode\":%g,\"cpu_level\":%g,\"gpu_level\":%g,\"gpu_mem_level\":%g,\"csm_quality_level\":%g,\"mat_vsync\":%g,\"scene_render_percent\":%g,\"fps_limit\":%g,\"metal_spatial_upscale\":%g,\"fullscreen\":%s,\"borderless\":%s,\"fullscreen_locked\":true,\"quality_preset\":%d,\"base_fps_locked\":%s,\"high_resolution\":[%d,%d],\"menu_blur\":{\"effect\":\"%s\",\"surface_pixels\":[%d,%d],\"render_pixels\":[%d,%d],\"ui_scale\":[%g,%g],\"mask_rect\":[%g,%g,%g,%g],\"target_rect\":[%g,%g,%g,%g],\"background_rect\":[%g,%g,%g,%g],\"content_rect\":[%g,%g,%g,%g],\"play_start_rect\":[%g,%g,%g,%g],\"open\":%s,\"covers_viewport\":%s,\"layout_updates\":%u}}",
         values[0],values[1],values[2],values[3],values[4],values[5],values[6],values[7],values[8],values[9],values[10],
-        config.Windowed()?"false":"true",config.NoWindowBorder()?"true":"false");
+        config.Windowed()?"false":"true",config.NoWindowBorder()?"true":"false",
+        I5Touch::icsm_quality_preset.GetInt(),I5Touch::s_qualityFrameLocked?"true":"false",
+        I5Touch::icsm_quality_high_width.GetInt(),I5Touch::icsm_quality_high_height.GetInt(),
+        blurEffect,I5Touch::s_menuBlurSurfaceWidth,I5Touch::s_menuBlurSurfaceHeight,width,height,
+        I5Touch::s_menuBlurScaleX,I5Touch::s_menuBlurScaleY,
+        mask.x,mask.y,mask.width,mask.height,target.x,target.y,target.width,target.height,
+        background.x,background.y,background.width,background.height,
+        content.x,content.y,content.width,content.height,playStart.x,playStart.y,playStart.width,playStart.height,
+        open?"true":"false",covers?"true":"false",I5Touch::s_menuBlurLayoutUpdates);
     return length>0 && size_t(length)<capacity?size_t(length):0;
 }
 

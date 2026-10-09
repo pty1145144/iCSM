@@ -16,6 +16,15 @@
 #error touch_ui_ios.mm must be compiled with -fobjc-arc
 #endif
 
+static void updateGlassNavigationLayout();
+static void shutdownGlassNavigation();
+static void updateMapGalleryLayout();
+static void shutdownMapGallery();
+static void shutdownSettingsScroll();
+static void shutdownConsoleHeader();
+static void updateInventoryLayout();
+static void shutdownInventory();
+
 namespace {
 enum Kind { Held, Weapon, Command };
 struct Control {
@@ -51,6 +60,7 @@ static MTLPixelFormat pixelFormat=MTLPixelFormatBGRA8Unorm;
 static CGSize viewSize=CGSizeZero,drawableSize=CGSizeZero;
 static UIEdgeInsets safe=UIEdgeInsetsZero;
 static CGFloat displayScale=1,screenLandscapePoints=0;
+static std::atomic<float> menuUIScale{1.0f};
 static SourceTouchState state={};
 static SourceTouchCallbacks callbacks={};
 static void *callbackUser=nullptr;
@@ -312,7 +322,13 @@ static void updateView(UIView *view) {
     CGFloat screenWidth=std::max(view.window.screen.bounds.size.width,view.window.screen.bounds.size.height);
     if(!CGSizeEqualToSize(size,viewSize) || !UIEdgeInsetsEqualToEdgeInsets(safe,insets) || displayScale!=scale || screenLandscapePoints!=screenWidth)dirty=true;
     viewSize=size;safe=insets;displayScale=scale;screenLandscapePoints=screenWidth;
+    // The phone's short landscape viewport needs denser menu content. Cache
+    // the idiom here; Source never queries UIKit from its rendering thread.
+    menuUIScale.store(view.traitCollection.userInterfaceIdiom==UIUserInterfaceIdiomPhone?.9f:1.0f);
     if(drawableSize.width<=0)drawableSize=CGSizeMake(llround(size.width*scale),llround(size.height*scale));
+    updateGlassNavigationLayout();
+    updateMapGalleryLayout();
+    updateInventoryLayout();
 }
 static void refreshHostState() {
     void (*fn)(void*)=nullptr;void *user=nullptr;
@@ -395,11 +411,31 @@ static void end(uintptr_t key,double t) {
 
 #include "touch_layout_editor.inc"
 #include "player_name_editor.inc"
+#include "room_browser.inc"
+#include "translucent_surface_ios.inc"
+#include "console_header_ios.inc"
+#include "glass_navigation_ios.inc"
+#include "map_gallery_ios.inc"
+#include "settings_scroll_ios.inc"
+#include "glass_inventory_ios.inc"
+
+extern "C" float SourceTouchMenuUIScale() {return menuUIScale.load();}
+
+extern "C" void SourceTouchExportErrorLogs() {
+    NSCAssert(NSThread.isMainThread,@"Log sharing belongs to the Source main thread");
+    SourceTouchCancelAll(now());
+    [NSNotificationCenter.defaultCenter postNotificationName:@"ICSMExportErrorLogs" object:nil];
+}
 
 extern "C" bool SourceTouchInitialize(void *device) {
     std::lock_guard<std::recursive_mutex> lock(mutex);return initialize((__bridge id<MTLDevice>)device,MTLPixelFormatBGRA8Unorm);
 }
 extern "C" void SourceTouchShutdown() {
+    shutdownGlassNavigation();
+    shutdownMapGallery();
+    shutdownSettingsScroll();
+    shutdownConsoleHeader();
+    shutdownInventory();
     std::lock_guard<std::recursive_mutex> lock(mutex);cancel(now());[controller disconnect];controller=nil;metalDevice=nil;host=nil;controls.clear();available=false;dirty=true;
     uikitRoutes.clear();viewOrientation=UIInterfaceOrientationUnknown;
     for(id token in notificationTokens)[NSNotificationCenter.defaultCenter removeObserver:token];notificationTokens=nil;
@@ -485,32 +521,53 @@ extern "C" bool SourceTouchUIKitTouches(void *view,void *set,void *event,int pha
     if(phase==SourceTouchCancelled)cancel(samples.empty()?now():samples.back().timestamp);
     return true;
 }
+static unsigned long long mergedOverlayFrames=0,separateOverlayFrames=0;
+static bool prepareTouchRendering(id<MTLDevice> device,id<MTLTexture> target) {
+    if(NSThread.isMainThread)updateView(host);
+    CGSize size=CGSizeMake(target.width,target.height);
+    if(!CGSizeEqualToSize(drawableSize,size)){drawableSize=size;dirty=true;}
+    if(!initialize(device,target.pixelFormat) || viewSize.width<=0 || viewSize.height<=0)return false;
+    if(dirty)rebuild();
+    else if(inventoryDirty)refreshWeapons();
+    return true;
+}
+static void encodeTouchRendering(id<MTLRenderCommandEncoder> encoder,id<MTLTexture> target) {
+    [encoder setViewport:MTLViewport{0,0,double(target.width),double(target.height),0,1}];
+    [encoder setScissorRect:MTLScissorRect{0,0,target.width,target.height}];
+    [encoder setCullMode:MTLCullModeNone];
+    [controller renderUsingRenderCommandEncoder:encoder];++renderedFrames;
+}
+extern "C" void SourceTouchRenderMetalWithEncoder(void *buffer,void *texture) {
+    refreshHostState();
+    std::lock_guard<std::recursive_mutex> lock(mutex);
+    if(editing || !visible() || !buffer || !texture)return;
+    @autoreleasepool {
+        id<MTLRenderCommandEncoder> encoder=(__bridge id<MTLRenderCommandEncoder>)buffer;
+        id<MTLTexture> target=(__bridge id<MTLTexture>)texture;
+        if(!prepareTouchRendering(encoder.device,target))return;
+        encodeTouchRendering(encoder,target);++mergedOverlayFrames;
+    }
+}
 extern "C" void SourceTouchRenderMetal(void *buffer,void *texture) {
     refreshHostState();
     std::lock_guard<std::recursive_mutex> lock(mutex);
     if(editing || !visible() || !buffer || !texture)return;
     @autoreleasepool {
         id<MTLCommandBuffer> command=(__bridge id<MTLCommandBuffer>)buffer;id<MTLTexture> target=(__bridge id<MTLTexture>)texture;
-        if(NSThread.isMainThread)updateView(host);
-        CGSize size=CGSizeMake(target.width,target.height);
-        if(!CGSizeEqualToSize(drawableSize,size)){drawableSize=size;dirty=true;}
-        if(!initialize(command.device,target.pixelFormat) || viewSize.width<=0 || viewSize.height<=0)return;
-        if(dirty)rebuild();
-        else if(inventoryDirty)refreshWeapons();
+        if(!prepareTouchRendering(command.device,target))return;
         MTLRenderPassDescriptor *pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=target;
         pass.colorAttachments[0].loadAction=MTLLoadActionLoad;pass.colorAttachments[0].storeAction=MTLStoreActionStore;
         id<MTLRenderCommandEncoder> encoder=[command renderCommandEncoderWithDescriptor:pass];encoder.label=@"CSGO iPad TouchController UI";
-        [encoder setViewport:MTLViewport{0,0,double(target.width),double(target.height),0,1}];
-        [controller renderUsingRenderCommandEncoder:encoder];[encoder endEncoding];++renderedFrames;
+        encodeTouchRendering(encoder,target);[encoder endEncoding];++separateOverlayFrames;
     }
 }
 extern "C" void SourceTouchCancelAll(double timestamp) {
     std::lock_guard<std::recursive_mutex> lock(mutex);cancel(timestamp);
     for(auto &route:uikitRoutes)route.second=CancelledRoute;
 }
-extern "C" size_t SourceTouchCopyDiagnosticsJSON(char *buffer,size_t capacity) {
-    if(!buffer || !capacity)return 0;
+static NSDictionary *touchDiagnosticsSnapshot() {
     std::lock_guard<std::recursive_mutex> lock(mutex);NSMutableArray *rectangles=[NSMutableArray array];
+    if(NSThread.isMainThread && glassInventory)inventoryDiagnostics=[glassInventory diagnostics];
     for(const auto &c:controls)[rectangles addObject:@{@"name":@(c.label.c_str()),@"rect_points":@[@(c.rect.origin.x),@(c.rect.origin.y),@(c.rect.size.width),@(c.rect.size.height)],
         @"native_center":@[@(c.native.position.x),@(c.native.position.y)],@"owners":@(c.owners),@"enabled":@(c.enabled)}];
     const Control *fire=nullptr;for(const auto &c:controls)if(c.label=="attack"){fire=&c;break;}
@@ -537,9 +594,23 @@ extern "C" size_t SourceTouchCopyDiagnosticsJSON(char *buffer,size_t capacity) {
         @"movement_mode":@"left_half_swipe",@"move_rect_points":@[@(moveRect.origin.x),@(moveRect.origin.y),@(moveRect.size.width),@(moveRect.size.height)],
         @"move_full_speed_distance_points":@(moveRadius),@"move_owner_active":@(moveOwner!=0),
         @"active_touches":@(owners.size()),@"actual_samples":@(actualSamples),@"look_samples":@(lookSamples),@"look_total_points":@[@(lookDX),@(lookDY)],
-        @"rendered_frames":@(renderedFrames),@"cancel_transitions":@(cancellations),@"mfi_filter_matches":@(mfiFilterMatches),@"controls":rectangles,@"fire_layout":fireLayout,
+        @"rendered_frames":@(renderedFrames),@"merged_overlay_frames":@(mergedOverlayFrames),@"separate_overlay_frames":@(separateOverlayFrames),@"cancel_transitions":@(cancellations),@"mfi_filter_matches":@(mfiFilterMatches),@"controls":rectangles,@"fire_layout":fireLayout,
+        @"navigation":glassNavigationDiagnostics?:@{},
+        @"map_gallery":mapGalleryDiagnostics?:@{},
+        @"settings_scroll":settingsScrollDiagnostics(),
+        @"console":consoleHeaderDiagnostics(),
+        @"inventory":inventoryDiagnostics?:@{},
         @"layout":@{@"editing":@(editing),@"loaded":@(layoutLoaded),@"saved_controls":savedLayout?:@{},@"saves_this_process":@(layoutSaves),@"error":layoutError?:@"",@"editor":layoutEditor?[layoutEditor diagnostics]:@{}}};
-    NSData *json=[NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
+    return d;
+}
+// UIKit's host already consumes Foundation objects. Avoid encoding and then
+// immediately decoding this entire snapshot in its main-thread timer.
+extern "C" __attribute__((visibility("default"))) NSDictionary *SourceTouchDiagnosticsSnapshot() {
+    return touchDiagnosticsSnapshot();
+}
+extern "C" size_t SourceTouchCopyDiagnosticsJSON(char *buffer,size_t capacity) {
+    if(!buffer || !capacity)return 0;
+    NSData *json=[NSJSONSerialization dataWithJSONObject:touchDiagnosticsSnapshot() options:0 error:nil];
     if(json.length+1>capacity){buffer[0]=0;return 0;}std::memcpy(buffer,json.bytes,json.length);buffer[json.length]=0;return json.length;
 }
 
@@ -734,6 +805,7 @@ extern "C" size_t SourceTouchRoutingSelfTestJSON(char *buffer,size_t capacity) {
 extern "C" void SourceTouchConsoleSetVisible(bool value) {
     NSCAssert(NSThread.isMainThread,@"Console UI belongs to the Source main thread");
     consoleVisible=value;
+    updateConsoleHeaderLayout();
 }
 extern "C" bool SourceTouchConsoleIsVisible(void) {return consoleVisible;}
 extern "C" float SourceTouchConsoleAvailableHeight(void) {

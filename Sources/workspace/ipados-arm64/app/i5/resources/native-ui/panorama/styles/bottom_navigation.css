@@ -1,0 +1,202 @@
+/* Preserve the original controls, IDs and handlers; change their layout. */
+/* Keep the notification ID for Source's handlers, without drawing or reserving
+   the removed title strip. MainMenuInput can now occupy the full surface. */
+#NotificationsContainer
+{
+    visibility: collapse;
+    height: 0px;
+    margin: 0px;
+    padding: 0px;
+}
+
+#MainMenuNavBarLeft
+{
+    width: 336px;
+    height: 112px;
+    horizontal-align: left;
+    vertical-align: bottom;
+    margin: 0px 48px 56px 48px;
+    border-right: 0px solid transparent;
+    border: 1px solid #ffffff20;
+    border-radius: 14.4px;
+}
+
+#MainMenuNavBarRight
+{
+    width: 336px;
+    height: 112px;
+    horizontal-align: right;
+    vertical-align: bottom;
+    margin: 0px 48px 56px 48px;
+    border: 1px solid #ffffff20;
+    border-radius: 14.4px;
+}
+
+.MainMenuRootPanel--PauseMenuMode #MainMenuNavBarLeft
+{
+    width: fit-children;
+    horizontal-align: center;
+    margin: 0px 96px 56px 96px;
+}
+
+#MainMenuNavBarHome
+{
+    visibility: collapse;
+}
+
+#JsMainMenuNavBar,
+#ICSMNavBarRightButtons
+{
+    flow-children: right;
+    width: fit-children;
+    height: 112px;
+    horizontal-align: center;
+    background-color: #18202ade;
+}
+
+/* UIKit uses these original layout bounds and invokes their original events. */
+.icsm-native-glass-nav #MainMenuNavBarLeft,
+.icsm-native-glass-nav #MainMenuNavBarRight
+{
+    opacity: 0;
+}
+
+.icsm-native-glass-title #NotificationsContainer
+{
+    opacity: 0;
+}
+
+#MainMenuNavBarLeft .mainmenu-navbar__btn-small,
+#MainMenuNavBarRight .mainmenu-navbar__btn-small
+{
+    width: 112px;
+    height: 112px;
+    tooltip-position: top;
+    tooltip-body-position: 50% 100%;
+}
+
+#MainMenuNavBarLeft .mainmenu-navbar__btn-small Image,
+#MainMenuNavBarRight .mainmenu-navbar__btn-small Image
+{
+    width: 40px;
+    height: 40px;
+    horizontal-align: center;
+    vertical-align: center;
+}
+
+#MainMenuNavBarLeft .mainmenu-navbar__btn-home
+{
+    border-bottom: 0px solid transparent;
+    border-right: 1px solid #ffffff20;
+}
+
+#MainMenuNavBarEnd
+{
+    flow-children: right;
+    width: fit-children;
+    height: 112px;
+}
+
+/* Give the inventory, play and settings pages room above the navigation. */
+#JsMainMenuContent
+{
+    vertical-align: top;
+    margin-bottom: 192px;
+}
+
+/* Blur only the background composition layer. Foreground page labels,
+   covers and controls are painted afterwards and stay sharp. */
+#MainMenuCore,
+CSGOMainMenu.PopupBackgroundBlur #MainMenuInput
+{
+    blur: none;
+}
+
+#MainMenuBackground
+{
+    blur: fastgaussian(8, 8, 3);
+}
+
+/* Blur only the lobby imagery, before the sharp page controls are painted.
+   Keep the existing pass count; neutralize its blue sky through saturation. */
+CSGOMainMenu.icsm-neutral-frost #MainMenuBackground
+{
+    blur: fastgaussian(10, 10, 3);
+    saturation: 0;
+}
+
+CSGOMainMenu.icsm-neutral-frost #ICSMMenuBlur #mainmenu-content__blur-target
+{
+    background-color: rgba(28, 28, 28, 0.22);
+}
+
+#ICSMConsoleBlurTarget
+{
+    visibility: visible;
+    background-color: rgba(16, 20, 28, 0.52);
+}
+
+#ICSMConsoleBlurTarget.hidden
+{
+    visibility: collapse;
+}
+
+/* A modal console samples the lobby backdrop, not the sharp map/settings
+   controls underneath it. Keep the selected page/state ready for closing. */
+.icsm-console-open #JsMainMenuContent
+{
+    opacity: 0;
+}
+
+/* Source sizes/positions this rectangle from the actual window surface and
+   UI scale, with outward pixel alignment. It never slides with page content. */
+#ICSMMenuBlur
+{
+    width: 100%;
+    height: 100%;
+    horizontal-align: left;
+    vertical-align: top;
+    margin: 0px;
+    padding: 0px;
+    overflow: noclip;
+    transition-property: none;
+}
+
+#MainMenuCore
+{
+    /* Allow the backdrop's one-surface-pixel edge guard past its container. */
+    overflow: noclip;
+}
+
+/* One Source background blur is shared by the page's translucent panels. */
+#ICSMMenuBlur #mainmenu-content__blur-target
+{
+    background-color: rgba(16, 20, 28, 0.22);
+    opacity: 1;
+}
+
+#ICSMMenuBlur.hidden
+{
+    visibility: collapse;
+}
+
+/* The original hover rule tints images dark; FPS always reflects its state. */
+#MainMenuNavBarRight #MainMenuNavBarFPS Image
+{
+    wash-color: white;
+    transition-duration: 0s;
+}
+
+#MainMenuNavBarRight #MainMenuNavBarFPS.icsm-fps-enabled Image
+{
+    wash-color: #a4e36b;
+}
+
+/* This sits above the background and below the profile/content/navigation.
+   Only empty areas reach it; buttons and page controls keep their own input. */
+#ICSMFPSDismiss
+{
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+}

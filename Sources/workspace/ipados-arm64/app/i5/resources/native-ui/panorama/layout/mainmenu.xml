@@ -4,11 +4,13 @@
 		<include src="file://{resources}/styles/mainmenu.css" />
 		<include src="file://{resources}/styles/local_profile.css" />
 		<include src="file://{resources}/styles/console_launcher.css" />
+		<include src="file://{resources}/styles/bottom_navigation.css" />
 	</styles>	
 	<scripts>
 		<include src="file://{resources}/scripts/common/promoted_settings.js" />
 		<include src="file://{resources}/scripts/mainmenu.js" />
 		<include src="file://{resources}/scripts/local_profile.js" />
+		<include src="file://{resources}/scripts/bottom_navigation.js" />
 		<include src="file://{resources}/scripts/common/characteranims.js" />
 		<include src="file://{resources}/scripts/common/iteminfo.js" />
 		<include src="file://{resources}/scripts/common/licenseutil.js" />
@@ -18,8 +20,8 @@
 	<snippets>
 		<snippet name="MainMenuMovieSnippet">
 			<Panel>
-				                                 
-				                                                                                                              
+
+
 				<Movie class="mainmenu-movie MainMenuModeOnly" 
 					id="MainMenuMovie"
 					src=""
@@ -52,55 +54,59 @@
 				<Label id="MainMenuNotificationTitle"/>
 			</Panel>
 			<Panel id="MainMenuInput">                                              
-				
-				<CSGOBlurTarget id="MainMenuCore" blurrects="ChatLinesContainerBg mainmenu-sidebar__blur-target CSGOLoadingScreen JsMainMenuNavBar eom-winner">
-					<CSGOBlurTarget id="MainMenuBackground" blurrects= "mainmenu-content__blur-target JsNewsPanel id-tournament-pass-status JsStorePanel JsStreamPanel JsWatchNoticePanel">
+
+				<CSGOBlurTarget id="MainMenuCore" blurrects="ChatLinesContainerBg mainmenu-sidebar__blur-target CSGOLoadingScreen eom-winner">
+					<CSGOBlurTarget id="MainMenuBackground" blurrects= "mainmenu-content__blur-target ICSMConsoleBlurTarget JsNewsPanel id-tournament-pass-status JsStorePanel JsStreamPanel JsWatchNoticePanel">
 						<Panel class="mainmenu-vanity__vignette" hittest="false"/>
-						                                                      
+
 						<CSGOBackbufferImagePanel class="full-width full-height PauseMenuModeOnly" />
 
-						            
-						                                                       
-						            
-						
-						            
+
+
+
+
+
 						<Panel id="MainMenuMovieParent">
-							                                                                                      
+
 						</Panel>
-						                
+
 						<Panel id="MainMenuVanityParent">
-							                                                 
+
 						</Panel>
 					</CSGOBlurTarget>
 
+					<Button id="ICSMFPSDismiss" class="icsm-fps-dismiss hidden" acceptsfocus="false" hittestchildren="false" onactivate="ICSMBottomNavigation.CloseFPS();" />
+					<Panel id="ICSMConsoleBlurTarget" class="icsm-console-blur-target hidden" hittest="false" hittestchildren="false" />
+					<!-- A frosted backdrop spans the whole viewport.
+					     Keep the original panel ID for menu input/lifecycle. -->
+					<Panel id="ICSMMenuBlur" class="icsm-menu-blur hidden" hittest="false" hittestchildren="false">
+						<Panel class="mainmenu-content__blur" hittest="false">
+							<Panel id="mainmenu-content__blur-target" hittest="false" />
+						</Panel>
+					</Panel>
+
 					<Panel id="JsNewsContainer" class="mainmenu_news_container hidden MainMenuModeOnly" >
-						                                                       
+
 					</Panel >
-					<Button id="ICSMProfile" class="icsm-profile MainMenuModeOnly" onload="ICSMProfile.Init();" onactivate="GameInterfaceAPI.ConsoleCommand('i5_player_name');">
-						<Image class="icsm-profile-avatar" src="file://{images}/icons/ui/player.svg" scaling="stretch-to-fit-preserve-aspect" />
-						<Label id="ICSMProfileName" class="icsm-profile-name" />
-						<Label class="icsm-profile-edit" text="修改昵称" />
-					</Button>
+
 
 					<Panel id="JsMainMenuContent" class="mainmenu-content mainmenu-content--offscreen">
-						<Panel class="mainmenu-content__blur">
-							<Panel id="mainmenu-content__blur-target"/>
-						</Panel>
-						                                                                                    
+
 					</Panel>
 				</CSGOBlurTarget>
 
-				<CSGOBlurTarget id="MainMenuNavBarLeft" class="mainmenu-navbar-container" blurrects="CSGOLoadingScreen">
-	
+				<!-- The bottom bar has its own background; it no longer uses the
+				     original side bar's tracked blur rectangles. -->
+				<Panel id="MainMenuNavBarLeft" class="mainmenu-navbar-container">
+
 					<Panel id="JsMainMenuNavBar" class="mainmenu-navbar">
-						                                            
+
 						<RadioButton id="MainMenuNavBarHome"
-									class="mainmenu-navbar__btn-small mainmenu-navbar__btn-home MainMenuModeOnly"
+									class="mainmenu-navbar__btn-small mainmenu-navbar__btn-home icsm-internal-home MainMenuModeOnly"
 									group="NavBar"
 									onactivate="MainMenu.OnHomeButtonPressed(); $.DispatchEvent( 'PlaySoundEffect', 'mainmenu_press_home', 'MOUSE' ); $.DispatchEvent('PlayMainMenuMusic', true, true); GameInterfaceAPI.SetSettingString('panorama_play_movie_ambient_sound', '1');"
 									onmouseover="UiToolkitAPI.ShowTextTooltip('MainMenuNavBarHome', '#tooltip_navbar_home');"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/csgologo.svg" />
 						</RadioButton>
 						<RadioButton id="MainMenuNavBarPlay"
 									class="mainmenu-navbar__btn-small mainmenu-navbar__btn-play"
@@ -108,162 +114,173 @@
 									onactivate="$.DispatchEvent('OpenPlayMenu');"
 									onmouseover="UiToolkitAPI.ShowTextTooltip('MainMenuNavBarPlay', '#tooltip_navbar_play');"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="56" texturewidth="-1" src="file://{images}/icons/ui/play_circle.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/play_circle.svg" />
 						</RadioButton>
-						<Frame class="MainMenuModeOnly" src="file://{resources}/layout/advertising_toggle.xml" />
-						                                                    
+
 						<RadioButton id="MainMenuNavBarResumeGame"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									group="NavBar" 
 									onactivate="$.DispatchEvent( 'CSGOMainMenuResumeGame' );"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarResumeGame', '#tooltip_navbar_resume_game' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="42" texturewidth="-1" src="file://{images}/icons/ui/ResumeGame.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/ResumeGame.svg" />
 						</RadioButton>
-						                                                    
+
 						<Button id="MainMenuNavBarSwitchTeams"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="$.DispatchEvent( 'CSGOMainMenuSwitchTeams' );"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarSwitchTeams', '#tooltip_navbar_switch_teams' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="40" texturewidth="-1" src="file://{images}/icons/ui/VoteTeamSwitch.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/VoteTeamSwitch.svg" />
 						</Button>
-						                                                   
+
 						<Button id="MainMenuNavBarVote"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="MainMenu.ShowVote()"
 									oncontextmenu="MainMenu.ShowVote()"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarVote', '#tooltip_navbar_vote' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/check.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/check.svg" />
 						</Button>
-						                                                      
+
 						<Button id="MainMenuNavBarReportServer"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="UiToolkitAPI.ShowCustomLayoutPopupParameters('', 'file://{resources}/layout/popups/popup_report_server.xml', '' );"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarReportServer', '#tooltip_navbar_report_server' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/report_server.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/report_server.svg" />
 						</Button>
-						                                                      
+
 						<Button id="MainMenuNavBarShowCommunityServerBrowser"
 									class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 									onactivate="GameInterfaceAPI.ConsoleCommand( 'gamemenucommand openserverbrowser' )"
 									oncontextmenu="GameInterfaceAPI.ConsoleCommand( 'gamemenucommand openserverbrowser' )"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarShowCommunityServerBrowser', '#play_setting_community' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/servers.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/servers.svg" />
 						</Button>
-						                           
+
 						<RadioButton id="MainMenuNavBarInventory"
 									class="mainmenu-navbar__btn-small"
 									group="NavBar" 
 									onactivate="MainMenu.OpenInventory();"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarInventory', '#tooltip_navbar_inventory' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/inventory.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/inventory.svg" />
 							<Panel id="MainMenuInvAlert" class="navbar-btn__notification hidden">
 								<Label id="MainMenuInvAlertText" class="navbar-btn__notification-text" text=""/>
 							</Panel>
 						</RadioButton>
-						                                             
-						<RadioButton id="MainMenuNavBarWatch"
-									class="mainmenu-navbar__btn-small MainMenuModeOnly"
-									group="NavBar"
-									onactivate="NativeOfflineUI.Unavailable();"
-									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarWatch', '#tooltip_navbar_watch' );"
-									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="34" texturewidth="-1" src="file://{images}/icons/ui/watch_tv.svg" />
-							<Panel id="MainMenuWatchAlert" class="navbar-btn__notification hidden">
-								<Label id="MainMenuWatchAlertText" class="navbar-btn__notification-text" text="#Store_Price_New"/>
-							</Panel>
-						</RadioButton>
-						                                                 
+
+
 						<RadioButton id="MainMenuNavBarOverwatch"
 									class="mainmenu-navbar__btn-small MainMenuModeOnly"
 									group="NavBar"
 									onactivate="NativeOfflineUI.Unavailable();"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarOverwatch', '#tooltip_navbar_overwatch' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/overwatch.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/overwatch.svg" />
 							<Panel id="MainMenuOverwatchAlert" class="navbar-btn__notification overwatch">
 								<Label id="MainMenuOverwatchAlertText" class="navbar-btn__notification-text" text="+"/>
 							</Panel>
 						</RadioButton>
-						                          
+
 						<RadioButton id="MainMenuNavBarSettings"
 									class="mainmenu-navbar__btn-small"
 									group="NavBar"
 									onactivate="MainMenu.NavigateToTab('JsSettings', 'settings/settings');"
 									onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarSettings', '#tooltip_navbar_settings' );"
 									onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/settings.svg" />
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/settings.svg" />
 							<Panel id="MainMenuSettingsAlert" class="navbar-btn__notification settings-notification">
 								<Label class="navbar-btn__notification-text" text="{d:num_settings}"/> 
 							</Panel>
 						</RadioButton>
-						<Button id="MainMenuNavBarConsole"
-								class="mainmenu-navbar__btn-small MainMenuModeOnly"
-								onactivate="GameInterfaceAPI.ConsoleCommand('toggleconsole');"
-								onmouseover="UiToolkitAPI.ShowTextTooltip('MainMenuNavBarConsole', '打开控制台');"
-								onmouseout="UiToolkitAPI.HideTextTooltip();">
-							<Label class="icsm-console-icon" text="&gt;_" hittest="false" />
-							<Label class="icsm-console-title" text="控制台" hittest="false" />
-						</Button>
-						                                          
-						               
-						                                        
-									                                                         
-									              
-									                                                                           
-									                                                                                             
-									                                             
-							                                                                                     
-						              
-						               
-						                                   
-						               
-						                                    
-									                                                        
-									              
-									                                                                          
-									                                                                                           
-									                                             
-							                                                                                       
-						              
-						               
-						                                         
-						               
-						                                          
-									                                                        
-									              
-									                                                                 
-									                                                                                                  
-									                                             
-							                                                                                     
-						              
-						               
-		
-						<Panel class="vertical-align-bottom horizontal-center">
-							                                            
-							<Button id="MainMenuNavBarQuit"
-										class="mainmenu-navbar__btn-small MainMenuModeOnly"
-										onactivate="MainMenu.OnQuitButtonPressed(); $.DispatchEvent( 'PlaySoundEffect', 'UIPanorama.mainmenu_press_quit', 'MOUSE' );"
-										onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarQuit', '#tooltip_navbar_quit' );"
-										onmouseout="UiToolkitAPI.HideTextTooltip();">
-								<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/power.svg" />
-							</Button>
-							                                                  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+						<Panel id="MainMenuNavBarEnd" class="icsm-navbar-end">
+
+
+
+
 							<Button id="MainMenuNavBarExitGame"
 										class="mainmenu-navbar__btn-small PauseMenuModeOnly"
 										onactivate="$.DispatchEvent( 'CSGOMainMenuDisconnect' );"
 										onmouseover="UiToolkitAPI.ShowTextTooltip( 'MainMenuNavBarExitGame', '#tooltip_navbar_exit_game' );"
 										onmouseout="UiToolkitAPI.HideTextTooltip();">
-								<Image textureheight="32" texturewidth="-1" src="file://{images}/icons/ui/cancel.svg" />
+								<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/cancel.svg" />
 							</Button>
 						</Panel>
 					</Panel>
-				</CSGOBlurTarget>
+				</Panel>
+
+				<Panel id="MainMenuNavBarRight" class="mainmenu-navbar-container MainMenuModeOnly">
+					<Panel id="ICSMNavBarRightButtons" class="mainmenu-navbar">
+						<Button id="MainMenuNavBarConsole"
+								class="mainmenu-navbar__btn-small MainMenuModeOnly"
+								onactivate="GameInterfaceAPI.ConsoleCommand('toggleconsole');"
+								onmouseover="UiToolkitAPI.ShowTextTooltip('MainMenuNavBarConsole', 'Console');"
+								onmouseout="UiToolkitAPI.HideTextTooltip();">
+							<Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/icsm_console.svg" hittest="false" />
+						</Button>
+						<Button id="MainMenuNavBarRooms"
+                                class="mainmenu-navbar__btn-small MainMenuModeOnly"
+                                onactivate="GameInterfaceAPI.ConsoleCommand('icsm_room_browser');"
+                                onmouseover="UiToolkitAPI.ShowTextTooltip('MainMenuNavBarRooms', 'Find rooms');"
+                                onmouseout="UiToolkitAPI.HideTextTooltip();">
+                            <Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/servers.svg" hittest="false" />
+                        </Button>
+						<Button id="MainMenuNavBarFPS"
+                                    class="mainmenu-navbar__btn-small"
+                                    onload="ICSMBottomNavigation.Init();"
+                                    onactivate="ICSMBottomNavigation.ToggleFPS();"
+                                    onmouseover="ICSMBottomNavigation.ShowFPSTooltip();"
+                                    onmouseout="UiToolkitAPI.HideTextTooltip();">
+                                <Image textureheight="40" texturewidth="-1" scaling="stretch-to-fit-preserve-aspect" src="file://{images}/icons/ui/graph.svg" hittest="false" />
+                            </Button>
+					</Panel>
+				</Panel>
+
+				<Button id="ICSMProfile" class="icsm-profile MainMenuModeOnly" onload="ICSMProfile.Init();" onactivate="GameInterfaceAPI.ConsoleCommand('i5_player_name');" onmouseover="UiToolkitAPI.ShowTextTooltip('ICSMProfile', 'Edit name');" onmouseout="UiToolkitAPI.HideTextTooltip();">
+						<Image class="icsm-profile-avatar" src="file://{images}/icons/ui/player.svg" scaling="stretch-to-fit-preserve-aspect" hittest="false" />
+						<Label id="ICSMProfileName" class="icsm-profile-name" html="false" hittest="false" />
+						<Image class="icsm-profile-edit" textureheight="28" texturewidth="-1" src="file://{images}/icons/ui/edit.svg" hittest="false" />
+					</Button>
 
 				<CSGOBlurTarget id="MainMenuFriendsAndParty" hittest="false" style="visibility: collapse;" blurrects="CSGOLoadingScreen">
 					<Panel id="JsMainMenuSidebar" class="mainmenu-sidebar" hittest="false">
@@ -271,8 +288,8 @@
 								class="mainmenu-sidebar__container"
 								onmouseover="MainMenu.ExpandSidebar()"
 								onmouseout="MainMenu.MinimizeSidebar();">
-							                                                    
-							                                               
+
+
 						</Panel>
 						<Panel class="mainmenu-sidebar__seperator"/>
 					</Panel>
@@ -281,18 +298,18 @@
 					<Frame id="MatchmakingReconnectPanel" src="file://{resources}/layout/match-reconnect.xml" />
 
 				</CSGOBlurTarget>
-			
-			</Panel>
-			
-		</Panel>>
 
-		                                                                   
+			</Panel>
+
+		</Panel>
+
+
 		<CSGOPopupManager id="PopupManager" onpopupsdismissed="" />
 		<ContextMenuManager id="ContextMenuManager" />
 		<Panel id="ItemPreviewDebugManager" hittest="false" />
 		<CSGOTooltipManager id="TooltipManager" hittest="false" />
 
-		                                                                                                             
+
 		<Panel id="SteamNotificationsPlaceholder" hittest="false" />
 	</CSGOMainMenu>
 </root>

@@ -61,6 +61,7 @@
 #if defined(SOURCE_IOS)
 #include "offline_skin_quality.h"
 #include "offline_skin_quality_processor.inc"
+#include "offline_printstream_material.inc"
 #endif
 #include "cs_custom_clothing_visualsdata_processor.h"
 #include "cs_custom_epidermis_visualsdata_processor.h"
@@ -2429,6 +2430,9 @@ void CEconItemView::UpdateGeneratedMaterial( bool bIgnorePicMip, MDLHandle_t mod
 
 void CEconItemView::CreateCustomWeaponMaterials( CSWeaponID nWeaponId, bool bIgnorePicMip, MDLHandle_t modelHandle, CompositeTextureSize_t diffuseTextureSize )
 {
+#if defined(SOURCE_IOS)
+    if (ICSMPrintstream::Apply(this, modelHandle)) return;
+#endif
 	//read in paint kit
 	int nPaintKit = GetCustomPaintKitIndex();
 	const CPaintKit *pPaintKit = GetItemSchema()->GetPaintKitDefinition( nPaintKit );

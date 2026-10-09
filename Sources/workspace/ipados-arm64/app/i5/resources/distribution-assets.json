@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "identity": "6763a656d291f3512fa5fd38e1d6c176746f724d1948df46c9effba70c07f88f",
+  "identity": "0a90cd9c9999298657a0886329a55ee816497f740d5eed98f4cde6ca9dc141c4",
   "files": [
     {
       "path": "game-assets/csgo/autobuy.txt",
@@ -11478,8 +11478,8 @@
       "path": "game-assets/icsm-addon/cfg/icsm_aim_botz_2015.cfg"
     },
     {
-      "size": 226,
-      "sha256": "99200f9cddc7db512e3b3fb9283693d84955fdc1ea66363fcff9927aae90db8a",
+      "size": 116,
+      "sha256": "72a0a6f6cd052f11628deea9878eaf20fafc71cfa8368b0b925dad77d5b723fa",
       "path": "game-assets/icsm-addon/icsm-profile.json"
     },
     {
@@ -63493,6 +63493,6 @@
       "path": "shader-cache/fffd22abdfb94d583ca1f4bda1cb77d527c70fa1fcba9b9d5a401436a4e63509.metallib"
     }
   ],
-  "total_bytes": 19651176211,
+  "total_bytes": 19651176101,
   "shader_count": 7906
 }

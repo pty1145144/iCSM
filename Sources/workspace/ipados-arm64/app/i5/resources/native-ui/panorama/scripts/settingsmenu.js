@@ -1,191 +1,125 @@
 "use strict";
 
-                                                                                                    
-          
-                                                                                                    
-var SettingsMenu = ( function () {
-
-	var activeTab;
-	
-	let tabInfo = {
-		Promoted: {
-			xml: "settings_promoted",
-			radioid: "PromotedSettingsRadio"
-		},
-		KeybdMouseSettings: {
-			xml: 'settings_kbmouse',
-			radioid: "KBMouseRadio"
-		},
-		ControllerSettings: {
-			xml: 'settings_controller',
-			radioid: "ControllerRadio"
-		},
-		GameSettings: {
-			xml: "settings_game",
-			radioid: "GameRadio"
-		},
-		AudioSettings: {
-			xml: "settings_audio",
-			radioid: "AudioRadio"
-		},
-		VideoSettings: {
-			xml: "settings_video",
-			radioid: "VideoRadio"
-		},
-        TouchSettings: {
-            xml: "settings_touch",
-            radioid: "TouchRadio"
-        }
-	};
-
-    var _NavigateToTab = function( tabID ) {
-		
-        var bDisplayBlankPage = false;
-
-        if ( tabID == 'ControllerSettings' )
-        {
-           if ( OptionsMenuAPI.ShowSteamControllerBindingsPanel() )
-            {
-                bDisplayBlankPage = true;
-            }
-		}
-	
-        var parentPanel = $('#SettingsMenuContent');
-
-                                               
-                                    
-        if (!parentPanel.FindChildInLayoutFile(tabID))
-        {
-            var newPanel = $.CreatePanel('Panel', parentPanel, tabID);
-                                                             
-
-			let XmlName = tabInfo[ tabID ].xml;
-            newPanel.BLoadLayout('file://{resources}/layout/settings/' + XmlName + '.xml', false, false );
-            
-                                                                                        
-                                                                   
-            newPanel.OnPropertyTransitionEndEvent = function ( panelName, propertyName )
-            {   
-                if( newPanel.id === panelName && propertyName === 'opacity')
-                {
-                                                             
-                    if( newPanel.visible === true && newPanel.BIsTransparent() )
-                    {
-                                                                       
-                        newPanel.visible = false;
-                        newPanel.SetReadyForDisplay( false );
-                        return true;
-                    }
-                }
-
-                return false;
-            }
-
-            $.RegisterEventHandler( 'PropertyTransitionEnd', newPanel, newPanel.OnPropertyTransitionEndEvent );
-  
-                                                                                                                
-            newPanel.visible = false;
-        }
-
-                                                                                  
-                                
-        if( activeTab !==  tabID )
-        {
-                                             
-            if( activeTab )
-            {
-                var panelToHide = $.GetContextPanel().FindChildInLayoutFile( activeTab );
-                panelToHide.RemoveClass( 'Active' ); 
-                                                   
-            }
-            
-                               
-            var prevTab = activeTab;
-            activeTab = tabID;
-            var activePanel = $.GetContextPanel().FindChildInLayoutFile( tabID );
-            activePanel.AddClass( 'Active' );
-
-                                          
-
-                                                                                     
-            if ( !bDisplayBlankPage )
-            {
-                activePanel.visible = true;
-                activePanel.SetReadyForDisplay( true );   
-            }
-
-            SettingsMenuShared.NewTabOpened( activeTab );
-        }
+var SettingsMenu = (function () {
+    var activeTab;
+    var tabInfo = {
+        VideoSettings: { xml: "settings_video", radioid: "VideoRadio" },
+        TouchSettings: { xml: "settings_touch", radioid: "TouchRadio" },
+        GameSettings: { xml: "settings_game", radioid: "GameRadio" },
+        AudioSettings: { xml: "settings_audio", radioid: "AudioRadio" },
+        KeybdMouseSettings: { xml: "settings_kbmouse", radioid: "KBMouseRadio" },
+        ControllerSettings: { xml: "settings_controller", radioid: "ControllerRadio" }
     };
 
-    var _AccountPrivacySettingsChanged = function()
-    {
-                                                                                        
-                                                                                           
-                                                                                           
-        var gameSettingPanel = $.GetContextPanel().FindChildInLayoutFile ( "GameSettings" );
-        if ( gameSettingPanel != null )
-        {
-            var twitchTvSetting = gameSettingPanel.FindChildInLayoutFile( "accountprivacydropdown" );
-            if ( twitchTvSetting != null )
-            {
-                twitchTvSetting.OnShow();                
+    function NavigateToTab(tabID) {
+        if (!tabInfo[tabID]) return;
+        var parent = $("#SettingsMenuContent");
+        var panel = parent.FindChildInLayoutFile(tabID);
+        if (!panel) {
+            panel = $.CreatePanel("Panel", parent, tabID);
+            panel.BLoadLayout("file://{resources}/layout/settings/" + tabInfo[tabID].xml + ".xml", false, false);
+            panel.visible = false;
+        }
+        if (activeTab !== tabID) {
+            if (activeTab) {
+                var previous = parent.FindChildInLayoutFile(activeTab);
+                previous.RemoveClass("Active");
+                previous.visible = false;
+                previous.SetReadyForDisplay(false);
             }
+            activeTab = tabID;
+            parent.SetAttributeString("icsm-active-settings-tab", tabID);
+            panel.visible = true;
+            panel.SetReadyForDisplay(true);
+            panel.AddClass("Active");
+            var radio = $("#" + tabInfo[tabID].radioid);
+            if (radio) radio.checked = true;
+            SettingsMenuShared.NewTabOpened(tabID);
+            $.Msg("ICSM_SETTINGS_TAB ", tabID);
         }
     }
 
-    
-	var _OnSettingsMenuHidden = function ()
-	{
-                                           
-        GameInterfaceAPI.ConsoleCommand( "host_writeconfig");
-        
-                                                                                     
-                                                                                           
-                                                       
-        SettingsMenuShared.NewTabOpened( activeTab );
-	}
+    function NavigateToSetting(tabID, id) {
+        if (!tabInfo[tabID]) return;
+        NavigateToTab(tabID);
+        SettingsMenuShared.ScrollToId(id);
+    }
 
-	var _NavigateToSetting = function ( tab, id )
-	{
-		                                                  
-		$.DispatchEvent( "Activated", $( "#" + tabInfo[ tab ].radioid ), "mouse" );
-		SettingsMenuShared.ScrollToId( id );                     
-	}
+    // Invoked only by the local i5_settings_ui development command.
+    function ValidateUI(action, id, option) {
+        var root = $.GetContextPanel();
+        if (action === "tab") { NavigateToTab(id); return; }
+        if (action === "play") {
+            var main = root.Data().elMainMenuRoot;
+            var play = main ? main.FindChildTraverse("MainMenuNavBarPlay") : null;
+            if (play && play.enabled) $.DispatchEvent("Activated", play, "mouse");
+            return;
+        }
+        var activePanel = root.FindChildTraverse(activeTab);
+        var control = id && activePanel ? activePanel.FindChildTraverse(id) : null;
+        if (activeTab === "VideoSettings" && control && action !== "state") {
+            var allowed = { ICSMFrameRateLimit: true, MotionBlur: true, ICSMSkinShaderDetail: true,
+                            ICSMSkinTextureDetail: true, ICSMQualityHigh: true, ICSMQualityVeryLow: true,
+                            ICSMQualityLow: true, ICSMQualityMedium: true, ICSMFrameInterpolation: true };
+            if (!allowed[id] || !control.enabled) { $.Msg("ICSM_SETTINGS_LOCKED ", id); return; }
+        }
+        if (action === "reset" && activeTab === "AudioSettings") {
+            SettingsMenuShared.ResetAudioSettings();
+        } else if (action === "select" && control && control.paneltype === "CSGOSettingsEnumDropDown" && control.HasOption(option)) {
+            // The menu activation path also emits onuserinputsubmit, just
+            // like choosing an option by hand; SetSelected alone does not.
+            $.DispatchEvent("Activated", control, "mouse");
+            $.DispatchEvent("Activated", control.FindDropDownMenuChild(option), "mouse");
+        } else if (action === "slider" && control && control.paneltype === "CSGOSettingsSlider") {
+            var value = Number(option);
+            if (isFinite(value) && value >= Math.min(control.min, control.max) && value <= Math.max(control.min, control.max)) control.value = value;
+        } else if (action === "activate" && control && control.enabled) {
+            $.DispatchEvent("Activated", control, "mouse");
+        } else if (action === "state") {
+            var state = { tab: activeTab, controls: [], layout: [] };
+            [root, root.FindChildTraverse("SettingsMenuContent"), root.FindChildTraverse(activeTab),
+                activePanel ? activePanel.FindChildTraverse("ICSMSettingsScrollViewport") : null].forEach(function(panel) {
+                if (panel) state.layout.push({ id: panel.id, width: panel.actuallayoutwidth, height: panel.actuallayoutheight,
+                    x: panel.actualxoffset, y: panel.actualyoffset, scale: panel.actualuiscale_x, scrollY: panel.scrolloffset_y });
+            });
+            function visit(panel, hidden) {
+                hidden = hidden || panel.id === "ICSMVideoInternal" || panel.id === "ICSMVideoActionsInternal";
+                if (panel.paneltype === "CSGOSettingsEnumDropDown") {
+                    var selected = panel.GetSelected();
+                    state.controls.push({ id: panel.id, type: panel.paneltype, hidden: hidden, enabled: panel.enabled, selected: selected ? selected.id : "" });
+                } else if (panel.paneltype === "CSGOSettingsSlider") {
+                    var title = panel.FindChildTraverse("Title");
+                    var row = title ? title.GetParent() : null;
+                    state.controls.push({ id: panel.id, type: panel.paneltype, hidden: hidden, enabled: panel.enabled, value: panel.ActualValue(),
+                        title: title ? { text: title.text, width: title.actuallayoutwidth, height: title.actuallayoutheight } : null,
+                        row: row ? { width: row.actuallayoutwidth, height: row.actuallayoutheight } : null });
+                }
+                if (panel.GetChildCount) for (var i = 0; i < panel.GetChildCount(); ++i) visit(panel.GetChild(i), hidden);
+            }
+            visit(root.FindChildTraverse(activeTab), false);
+            var controls = state.controls;
+            state.control_count = controls.length;
+            delete state.controls;
+            $.Msg("ICSM_SETTINGS_STATE ", JSON.stringify(state));
+            controls.forEach(function(control) { control.tab = activeTab; $.Msg("ICSM_SETTINGS_CONTROL ", JSON.stringify(control)); });
+        }
+    }
+
+    function OnSettingsMenuHidden() {
+        GameInterfaceAPI.ConsoleCommand("host_writeconfig");
+    }
 
     return {
-
-        NavigateToTab	                : _NavigateToTab,
-        NavigateToSetting	            : _NavigateToSetting,
-        AccountPrivacySettingsChanged   : _AccountPrivacySettingsChanged,
-        OnSettingsMenuHidden            : _OnSettingsMenuHidden
+        NavigateToTab: NavigateToTab,
+        ValidateUI: ValidateUI,
+        GetActiveTab: function () { return activeTab; },
+        NavigateToSetting: NavigateToSetting,
+        OnSettingsMenuHidden: OnSettingsMenuHidden
     };
-    
-} )() ;
-
-                                                                                                    
-                                           
-                                                                                                    
-(function ()
-{
-	if ( PromotedSettingsUtil.GetUnacknowledgedPromotedSettings().length > 0 )
-	{
-		SettingsMenu.NavigateToTab( 'Promoted' );
-	}
-	else
-	{
-		const now = new Date();
-		if ( g_PromotedSettings.filter( setting => setting.start_date <= now && setting.end_date > now ).length == 0 )
-			$( '#PromotedSettingsRadio' ).visible = false;
-
-		SettingsMenu.NavigateToTab( 'GameSettings' );
-	}
-
-
-    
-
-	$.RegisterEventHandler( 'UnreadyForDisplay', $( '#JsSettings' ), SettingsMenu.OnSettingsMenuHidden );
-	$.RegisterForUnhandledEvent( 'SettingsMenu_NavigateToSetting',  SettingsMenu.NavigateToSetting );
-	
 })();
 
+(function () {
+    SettingsMenu.NavigateToTab("VideoSettings");
+    $.RegisterEventHandler("UnreadyForDisplay", $("#JsSettings"), SettingsMenu.OnSettingsMenuHidden);
+    $.RegisterForUnhandledEvent("SettingsMenu_NavigateToSetting", SettingsMenu.NavigateToSetting);
+})();

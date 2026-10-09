@@ -9,7 +9,8 @@ set(CMAKE_INSTALL_RPATH "@executable_path/Frameworks")
 set(I5_TEAM "" CACHE STRING "Development team")
 set(I5_BUNDLE_ID "local.csgo.ipados.i0probe" CACHE STRING "Existing app slot")
 option(ICSM_SIGN_APP "Sign and provision the app with the local Apple account" ON)
-add_executable(CSGOI5Client MACOSX_BUNDLE main.mm data_install.mm
+add_executable(CSGOI5Client MACOSX_BUNDLE main.mm data_install.mm diagnostics_export.mm
+ "${PORT}/vendor/minizip-1.3.1/zip.c"
  "${PORT}/vendor/minizip-1.3.1/unzip.c" "${PORT}/vendor/minizip-1.3.1/ioapi.c"
  "${PORT}/provenance/i0/asset-content-manifest.json")
 set_source_files_properties("${PORT}/provenance/i0/asset-content-manifest.json" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
@@ -18,7 +19,7 @@ add_custom_command(TARGET CSGOI5Client PRE_BUILD COMMAND ${CMAKE_COMMAND} -E cop
 target_sources(CSGOI5Client PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/original-assets.json")
 set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/original-assets.json" PROPERTIES GENERATED TRUE MACOSX_PACKAGE_LOCATION Resources)
 target_compile_options(CSGOI5Client PRIVATE "$<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>" -Wall -Wextra -Wno-deprecated-declarations)
-target_link_libraries(CSGOI5Client PRIVATE z "-framework Metal" "-framework UIKit" "-framework Foundation" "-framework CoreText" "-framework Network")
+target_link_libraries(CSGOI5Client PRIVATE z "-framework Metal" "-framework UIKit" "-framework Foundation" "-framework CoreText" "-framework Network" "-framework QuartzCore" "-framework CoreGraphics" "-framework MetricKit" "-framework UniformTypeIdentifiers")
 set_target_properties(CSGOI5Client PROPERTIES MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_LIST_DIR}/Info.plist"
  XCODE_ATTRIBUTE_COPY_PHASE_STRIP NO
  XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${I5_BUNDLE_ID}" XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${I5_TEAM}"
@@ -33,6 +34,10 @@ target_sources(CSGOI5Client PRIVATE "${CMAKE_CURRENT_LIST_DIR}/LaunchScreen.stor
 set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/LaunchScreen.storyboard" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 target_sources(CSGOI5Client PRIVATE "${CMAKE_CURRENT_LIST_DIR}/resources/native-ui")
 set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/resources/native-ui" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+target_sources(CSGOI5Client PRIVATE "${CMAKE_CURRENT_LIST_DIR}/resources/native-navigation")
+set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/resources/native-navigation" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+target_sources(CSGOI5Client PRIVATE "${CMAKE_CURRENT_LIST_DIR}/resources/printstream-trial")
+set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/resources/printstream-trial" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 target_sources(CSGOI5Client PRIVATE "${CMAKE_CURRENT_LIST_DIR}/resources/local-workshop/icsm-profile.json")
 set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/resources/local-workshop/icsm-profile.json" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
 target_sources(CSGOI5Client PRIVATE "${CMAKE_CURRENT_LIST_DIR}/resources/video-preset.json")

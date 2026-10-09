@@ -6,7 +6,8 @@ enum class PerfCount { Passes, Copies, Blits, VisibilityAllocations, Queries,
     PipelineMisses, TargetChanges, DepthChanges, GammaChanges, EncoderEnds,
     ColorLoads, ColorStores, DepthLoads, DepthStores, StencilLoads, StencilStores,
     LightmapShadowLocks, LightmapUploads, LightmapUploadBytes, LightmapInvalidations,
-    SpatialUpscales, SpatialFallbacks, Count };
+    SpatialUpscales, SpatialFallbacks, BufferRenames, BufferAllocations,
+    BufferReuses, BufferPreservedBytes, BufferRenameCPUNanoseconds, BufferEvictions, Count };
 void perfCount(PerfCount kind, unsigned long long amount=1);
 void perfPipelineTime(double milliseconds);
 void perfWaitTime(double milliseconds);

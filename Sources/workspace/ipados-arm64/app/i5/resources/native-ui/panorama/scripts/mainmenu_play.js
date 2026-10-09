@@ -516,6 +516,8 @@ var PlayMenu = ( function()
 	var _ShowActiveMapSelectionTab = function( isEnabled )
 	{
 		var panelID = m_activeMapGroupSelectionPanelID;
+		// Native touch scrolling targets this original, active map container.
+		$( '#MapSelectionList' ).SetAttributeString( 'icsm-active-map-container', panelID );
 
 		for ( var key in m_mapSelectionButtonContainers )
 		{

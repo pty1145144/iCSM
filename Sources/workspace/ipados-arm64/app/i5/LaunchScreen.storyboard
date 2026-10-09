@@ -27,13 +27,13 @@
                                     <imageView clipsSubviews="YES" userInteractionEnabled="NO" contentMode="scaleAspectFit" image="AuthorAvatar" translatesAutoresizingMaskIntoConstraints="NO" id="launch-avatar">
                                         <rect key="frame" x="420" y="0.0" width="160" height="160"/>
                                         <constraints>
-                                            <constraint firstAttribute="width" constant="160" id="avatar-width"/>
-                                            <constraint firstAttribute="height" constant="160" id="avatar-height"/>
+                                            <constraint firstAttribute="width" relation="lessThanOrEqual" constant="160" id="avatar-width"/>
+                                            <constraint firstAttribute="height" secondItem="launch-avatar" secondAttribute="width" id="avatar-height"/>
                                         </constraints>
                                     </imageView>
                                     <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="iCSM由BILIBILI@SU_ZeShin个人移植，&#10;严禁用以商业用途" textAlignment="center" lineBreakMode="wordWrap" numberOfLines="0" translatesAutoresizingMaskIntoConstraints="NO" id="launch-signature">
                                         <rect key="frame" x="0.0" y="184" width="1000" height="68"/>
-                                        <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="26"/>
+                                        <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="22"/>
                                         <color key="textColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                                         <nil key="highlightedColor"/>
                                         <color key="shadowColor" white="0.0" alpha="0.65" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
@@ -61,8 +61,9 @@
                             <constraint firstItem="launch-shade" firstAttribute="bottom" secondItem="launch-view" secondAttribute="bottom" id="shade-bottom"/>
                             <constraint firstItem="launch-shade" firstAttribute="leading" secondItem="launch-view" secondAttribute="leading" id="shade-leading"/>
                             <constraint firstItem="launch-shade" firstAttribute="trailing" secondItem="launch-view" secondAttribute="trailing" id="shade-trailing"/>
+                            <constraint firstItem="launch-avatar" firstAttribute="width" secondItem="launch-view" secondAttribute="height" multiplier="0.24" priority="750" id="avatar-adaptive"/>
                             <constraint firstItem="launch-brand" firstAttribute="centerX" secondItem="launch-view" secondAttribute="centerX" id="brand-center-x"/>
-                            <constraint firstItem="launch-brand" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" constant="-12" id="brand-center-y"/>
+                            <constraint firstItem="launch-brand" firstAttribute="centerY" secondItem="launch-view" secondAttribute="centerY" constant="-44" id="brand-center-y"/>
                             <constraint firstItem="launch-brand" firstAttribute="width" secondItem="launch-safe-area" secondAttribute="width" constant="-48" priority="750" id="brand-width-preferred"/>
                             <constraint firstItem="launch-brand" firstAttribute="width" relation="lessThanOrEqual" constant="1000" id="brand-width-max"/>
                             <constraint firstItem="launch-brand" firstAttribute="width" relation="lessThanOrEqual" secondItem="launch-safe-area" secondAttribute="width" constant="-48" id="brand-width-safe"/>

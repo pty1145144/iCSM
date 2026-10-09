@@ -64,6 +64,7 @@ extern ConVar asw_cam_marine_yaw;
 #include "cstrike15/panorama/hud/csgo_hud.h"
 #include "cstrike15/panorama/csgo_mainmenu.h"
 #include "panorama/controls/movieplayer.h"
+#include "panorama/controls/button.h"
 #include "panorama/iuipanel.h"
 #include "panorama/iuiwindow.h"
 #include "materialsystem/materialsystem_config.h"

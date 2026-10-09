@@ -51,19 +51,51 @@ inline void EntryPath(char *path, int size, int team, int definition)
     V_snprintf(path, size, "%s/%d", team == TEAM_CT ? "ct" : "t", definition);
 }
 
+inline bool SharedGun(int definition)
+{
+    const GameItemDefinition_t *ct = Definition(TEAM_CT, definition);
+    return ct && ct->GetWeaponSlot() != GEAR_SLOT_KNIFE && Definition(TEAM_TERRORIST, definition);
+}
+
+inline bool ReadEntry(KeyValues *data, int team, int definition, Selection &skin)
+{
+    char path[32]; EntryPath(path, sizeof(path), team, definition);
+    KeyValues *entry = data->FindKey(path);
+    if (!entry) return false;
+    Selection value;
+    value.paint = entry->GetInt("paint");
+    value.seed = entry->GetInt("seed");
+    value.wear = entry->GetFloat("wear");
+    if (!Valid(team, definition, value)) return false;
+    skin = value;
+    return true;
+}
+
 inline Selection Read(int team, int definition)
 {
     Selection skin;
     if (!filesystem || !Definition(team, definition)) return skin;
     KeyValues::AutoDelete data(new KeyValues("iCSMOfflineSkins"));
     if (!data->LoadFromFile(filesystem, File, "MOD") || data->GetInt("version") != 1) return skin;
+    // Existing version-1 saves may disagree across teams. Resolve those
+    // deterministically (valid CT choice, then T) without a startup rewrite.
+    // The same read is used by previews, listen-server spawn and network send.
+    if (SharedGun(definition))
+    {
+        if (!ReadEntry(data, TEAM_CT, definition, skin))
+            ReadEntry(data, TEAM_TERRORIST, definition, skin);
+    }
+    else ReadEntry(data, team, definition, skin);
+    return skin;
+}
+
+inline void WriteEntry(KeyValues *data, int team, int definition, const Selection &skin)
+{
     char path[32]; EntryPath(path, sizeof(path), team, definition);
-    KeyValues *entry = data->FindKey(path);
-    if (!entry) return skin;
-    skin.paint = entry->GetInt("paint");
-    skin.seed = entry->GetInt("seed");
-    skin.wear = entry->GetFloat("wear");
-    return Valid(team, definition, skin) ? skin : Selection();
+    KeyValues *entry = data->FindKey(path, true);
+    entry->SetInt("paint", skin.paint);
+    entry->SetInt("seed", skin.seed);
+    entry->SetFloat("wear", skin.wear);
 }
 
 inline bool Save(int team, int definition, const Selection &skin)
@@ -72,11 +104,13 @@ inline bool Save(int team, int definition, const Selection &skin)
     KeyValues::AutoDelete data(new KeyValues("iCSMOfflineSkins"));
     if (data->LoadFromFile(filesystem, File, "MOD") && data->GetInt("version") != 1) return false;
     data->SetInt("version", 1);
-    char path[32]; EntryPath(path, sizeof(path), team, definition);
-    KeyValues *entry = data->FindKey(path, true);
-    entry->SetInt("paint", skin.paint);
-    entry->SetInt("seed", skin.seed);
-    entry->SetFloat("wear", skin.wear);
+    if (SharedGun(definition))
+    {
+        // Commit both complete recipes through the existing atomic file swap.
+        WriteEntry(data, TEAM_CT, definition, skin);
+        WriteEntry(data, TEAM_TERRORIST, definition, skin);
+    }
+    else WriteEntry(data, team, definition, skin);
     filesystem->CreateDirHierarchy("cfg", "MOD");
     if (!data->SaveToFile(filesystem, "cfg/icsm-skins.tmp", "MOD")) return false;
     return filesystem->RenameFile("cfg/icsm-skins.tmp", File, "MOD");

@@ -31,9 +31,11 @@ The project requests `com.apple.developer.kernel.increased-memory-limit`. Its en
 
 ## 3. Import the game data
 
-Download **[iCSM-Data.zip from iCloud](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**. Keep this filename and **do not extract the data ZIP**.
+Download **[iCSM-v1.zip from iCloud](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**. Keep this filename and **do not extract the data ZIP**.
 
-In **Apple Devices → your device → Files → iCSM**, add `iCSM-Data.zip`. Wait for the transfer to finish, open iCSM, and tap **“检查并导入” (Check and Import)**. Allow at least **35 GB of free space** for the initial import. See the [complete data import guide](BUILD.en.md#2-import-data-from-macos-or-windows).
+You can instead download the matching ZIP to Files on your device, open iCSM, and tap **“选择数据包 ZIP” (Select Data ZIP)** on its initial page. This route preserves the original ZIP and accepts download-name suffixes. Import failures can be exported with **“导出报错日志” (Export Error Logs)** at the top right.
+
+For Windows file sharing, in **Apple Devices → your device → Files → iCSM**, add `iCSM-v1.zip`. Wait for the transfer to finish, open iCSM, and tap **“检查并导入” (Check and Import)**. Allow at least **35 GB of free space** for the initial import. See the [complete data import guide](BUILD.en.md#2-import-data-from-macos-or-windows).
 
 ## Build the same export on a Mac
 

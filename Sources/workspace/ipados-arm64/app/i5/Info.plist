@@ -17,7 +17,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>0.7.2</string>
 	<key>CFBundleVersion</key>
-	<string>86</string>
+	<string>149</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>LSSupportsGameMode</key>
@@ -27,7 +27,11 @@
 	<key>MetalCaptureEnabled</key>
 	<false/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>连接你指定的局域网 iCSM 私人游戏服务器。</string>
+	<string>搜索同一网络上的 iCSM 房间，并连接你指定的私人游戏服务器。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_icsm._udp</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

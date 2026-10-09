@@ -3,6 +3,7 @@
 		<include src="file://{resources}/styles/csgostyles.css" />
 		<include src="file://{resources}/styles/mainmenu.css" />
 		<include src="file://{resources}/styles/mainmenu_play.css" />
+		<include src="file://{resources}/styles/map_gallery.css" />
 		<include src="file://{resources}/styles/advertising_toggle.css" />
 	</styles>
 	<scripts>
@@ -77,7 +78,7 @@
 
 	</snippets>
 
-	<Panel class="mainmenu-content__container" useglobalcontext="true" >
+	<Panel class="mainmenu-content__container icsm-frosted-play" useglobalcontext="true" >
 		<Panel class="mainmenu-content__container mainmenu-content__container--nopadding">
 			<Panel class="content-navbar">
 				<Label id="LobbyLeaderText" class="content-navbar__title" text="#SFUI_MainMenu_PlayButton"/>
@@ -183,4 +184,3 @@
 
 	</Panel>
 </root>
-

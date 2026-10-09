@@ -3,16 +3,17 @@
         <include src="file://{resources}/styles/csgostyles.css" />
         <include src="file://{resources}/styles/settings/settings.css" />
         <include src="file://{resources}/styles/mainmenu.css" />
+        <include src="file://{resources}/styles/settings/settings_mobile.css" />
     </styles>
-    <Panel useglobalcontext="true" class="SettingsMenuTab">
-        <Panel class="SettingsMenuTabContent">
+    <Panel useglobalcontext="true" class="SettingsMenuTab ICSMMobileSettings">
+        <Panel id="ICSMSettingsScrollViewport" class="SettingsMenuTabContent vscroll">
             <Panel class="SettingsBackground" style="flow-children: down;">
                 <Panel class="SettingsSectionTitleContianer">
                     <Label class="SettingsSectionTitleLabel" text="触摸屏键位调整" />
                 </Panel>
                 <Label text="拖动按键调整位置，使用大小滑杆调整尺寸。点击保存后，布局会在下次启动时保留。" style="font-size: 22px; color: white; margin-bottom: 24px;" />
                 <Label text="整个右半屏的空白区域均可滑动转动视角。按键触摸不会转动视角，灵敏度保持恒定。" style="font-size: 22px; color: white; margin-bottom: 24px;" />
-                <Button class="PopupButton White" onactivate='GameInterfaceAPI.ConsoleCommand("i5_touch_layout");' style="width: 250px;">
+                <Button class="PopupButton White" onactivate="GameInterfaceAPI.ConsoleCommand(&quot;i5_touch_layout&quot;);" style="width: 250px;">
                     <Label text="调整按键" />
                 </Button>
             </Panel>

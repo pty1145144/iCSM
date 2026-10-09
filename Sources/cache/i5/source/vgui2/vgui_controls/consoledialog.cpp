@@ -45,6 +45,13 @@
 
 using namespace vgui;
 #if defined(SOURCE_IOS)
+static DHANDLE<CConsoleDialog> s_nativeConsole;
+static DHANDLE<CConsolePanel> s_nativeConsolePanel;
+static int s_nativeConsoleHistoryCursor=0;
+static void ICSMNativeConsoleClose()
+{
+    if(s_nativeConsole.Get())s_nativeConsole->OnCommand("Close");
+}
 static int ICSMConsoleTouchSize(int points)
 {
     int sw,sh,pw=0,ph=0;
@@ -66,6 +73,13 @@ static void ICSMConsoleLayout(Panel *dialog)
         dialog->SetBounds(x,y,w,h);
         dialog->InvalidateLayout(true);
     }
+    SourceTouchConsoleState state={};state.struct_size=sizeof(state);
+    state.render_width=sw;state.render_height=sh;
+    int dx=0,dy=0;dialog->LocalToScreen(dx,dy);
+    state.bounds={float(dx),float(dy),float(w),float(h)};
+    const int pad=ICSMConsoleTouchSize(4),header=ICSMConsoleTouchSize(44);
+    state.header={float(dx+pad),float(dy+pad),float(w-2*pad),float(header)};
+    SourceTouchUpdateConsole(&state,ICSMNativeConsoleClose);
 }
 #endif
 
@@ -416,9 +430,35 @@ CConsolePanel::~CConsolePanel()
 //-----------------------------------------------------------------------------
 void CConsolePanel::OnThink()
 {
-	BaseClass::OnThink();
+    BaseClass::OnThink();
 #if defined(SOURCE_IOS)
-    if(IsFullyVisible())ICSMConsoleLayout(GetParent());
+    if(IsFullyVisible() && GetParent() && !Q_stricmp(GetParent()->GetName(),"GameConsole")) {
+        ICSMConsoleLayout(GetParent());
+        // Keep this authoritative command/history host alive while UIKit
+        // draws the complete rounded console above the Metal view.
+        GetParent()->SetAlpha(0);
+        s_nativeConsolePanel=this;
+        SourceTouchConsoleSetCommandCallbacks(
+            [](const char *text) {
+                CConsolePanel *panel=s_nativeConsolePanel.Get();
+                if(!panel || !text)return;
+                panel->m_pEntry->SetText(text);
+                panel->OnCommand("submit");
+                s_nativeConsoleHistoryCursor=panel->m_CommandHistory.Count();
+            },
+            [](int direction) {
+                CConsolePanel *panel=s_nativeConsolePanel.Get();
+                if(!panel)return;
+                const int count=panel->m_CommandHistory.Count();
+                s_nativeConsoleHistoryCursor=clamp(s_nativeConsoleHistoryCursor+direction,0,count);
+                char text[256]={};
+                if(s_nativeConsoleHistoryCursor<count) {
+                    CHistoryItem *item=&panel->m_CommandHistory[s_nativeConsoleHistoryCursor];
+                    Q_snprintf(text,sizeof(text),"%s%s%s",item->GetText(),item->HasExtra()?" ":"",item->HasExtra()?item->GetExtra():"");
+                }
+                SourceTouchConsoleSetInputText(text);
+            });
+    }
 #endif
 
 	if ( !IsVisible() )
@@ -441,7 +481,11 @@ void CConsolePanel::OnThink()
 //-----------------------------------------------------------------------------
 void CConsolePanel::Clear()
 {
-	m_pHistory->SetText("");
+    m_pHistory->SetText("");
+#if defined(SOURCE_IOS)
+    if(GetParent() && !Q_stricmp(GetParent()->GetName(),"GameConsole"))
+        SourceTouchConsoleClearText();
+#endif
 	m_pHistory->GotoTextEnd();
 }
 
@@ -457,7 +501,11 @@ void CConsolePanel::ColorPrint( const Color& clr, const char *msg )
 	}
 
 	m_pHistory->InsertColorChange( clr );
-	m_pHistory->InsertString( msg );
+    m_pHistory->InsertString( msg );
+#if defined(SOURCE_IOS)
+    if(GetParent() && !Q_stricmp(GetParent()->GetName(),"GameConsole"))
+        SourceTouchConsoleAppendText(msg,clr.r(),clr.g(),clr.b(),clr.a());
+#endif
 }
 
 
@@ -1153,7 +1201,15 @@ void CConsolePanel::ApplySchemeSettings(IScheme *pScheme)
 		m_pCompletionList->SetBgColor( bgColor );
 	}
 
-	InvalidateLayout();
+#if defined(SOURCE_IOS)
+    if(GetParent() && !Q_stricmp(GetParent()->GetName(),"GameConsole")) {
+        SetPaintBackgroundEnabled(false);
+        m_pHistory->SetPaintBackgroundEnabled(false);
+        m_pEntry->SetBgColor(Color(8,11,17,180));
+        m_pCompletionList->SetBgColor(Color(16,20,28,220));
+    }
+#endif
+    InvalidateLayout();
 }
 
 #if defined( SOURCE_NATIVE_METAL )
@@ -1450,8 +1506,8 @@ CConsoleDialog::CConsoleDialog( vgui::Panel *pParent, const char *pName, bool bS
     if(!Q_stricmp(pName,"GameConsole")) {
         SetMoveable(false);SetSizeable(false);SetMenuButtonVisible(false);
         SetCloseButtonVisible(false);
-        Button *close=new Button(this,"ICSMConsoleClose","Close");
-        close->AddActionSignalTarget(this);close->SetCommand("Close");
+        SetTitleBarVisible(false);SetPaintBorderEnabled(false);SetPaintBackgroundEnabled(false);SetAlpha(0);
+        SetBgColor(Color(16,20,28,112));s_nativeConsole=this;
     }
 #endif
 }
@@ -1493,11 +1549,10 @@ void CConsoleDialog::PerformLayout()
 	GetClientArea( x, y, w, h );
 
 #if defined(SOURCE_IOS)
-    if(Panel *close=FindChildByName("ICSMConsoleClose")) {
-        const int height=ICSMConsoleTouchSize(44);
-        close->SetBounds(x+8,y,ICSMConsoleTouchSize(90),height);
-        close->SetZPos(100);
-        y+=height+8;h-=height+8;
+    if(!Q_stricmp(GetName(),"GameConsole")) {
+        const int height=ICSMConsoleTouchSize(44)+ICSMConsoleTouchSize(8);
+        y+=height;h-=height;
+        SetBgColor(Color(16,20,28,112));
     }
 #endif
     m_pConsolePanel->SetBounds( x, y, w, MAX(1,h) );
@@ -1511,6 +1566,7 @@ void CConsoleDialog::Activate()
 {
 #if defined(SOURCE_IOS)
     if(!Q_stricmp(GetName(),"GameConsole")) {
+        s_nativeConsoleHistoryCursor=m_pConsolePanel->m_CommandHistory.Count();
         SourceTouchConsoleSetVisible(true);ICSMConsoleLayout(this);
     }
 #endif

@@ -1,5 +1,5 @@
 {
-  "version": "player-profile-v2",
-  "default_name": "玩家",
+  "version": "player-profile-v3",
+  "default_name": "icsmer",
   "avatar": "file://{images}/icons/ui/player.svg"
 }

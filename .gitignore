@@ -17,3 +17,5 @@ __pycache__/
 /game-assets/
 /runtime-i5/
 *.zip.partial
+
+/iCSM-v1.zip

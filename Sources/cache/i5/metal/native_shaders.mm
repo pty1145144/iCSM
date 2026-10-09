@@ -168,6 +168,8 @@ std::unique_ptr<Shader> newShader(const DWORD *code,const char *name,const char 
     auto s=std::make_unique<Shader>();
     static std::atomic<unsigned> serial{0}; s->serial=++serial;
     s->name=name ?: ""; s->label=label ?: s->name;
+    if(s->name.find("lightmappedgeneric_ps")!=std::string::npos)
+        s->worldMaterialSamplerMask=(1u<<0)|(1u<<4)|(1u<<5)|(1u<<7)|(1u<<8)|(1u<<9)|(1u<<12);
     const unsigned size=bytecodeSize(code);
     std::vector<DWORD> parseCode(code,code+size/4);
     std::vector<std::string> centroidDecls;

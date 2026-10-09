@@ -1,0 +1,72 @@
+/* Source's CSGOBlurTarget supplies the blurred backdrop below this frosted
+   panel. Covers and labels are foreground draws and remain sharp. */
+.icsm-frosted-play
+{
+    /* Neutral tint over the actual blurred, desaturated lobby backdrop. */
+    background-color: rgba(0, 0, 0, 0.90);
+    border: 0px solid transparent;
+    border-radius: 0px;
+}
+
+.icsm-frosted-play .content-navbar__title
+{
+    color: white;
+}
+
+.icsm-frosted-play .content-navbar,
+.icsm-frosted-play .map-selection-list,
+.icsm-frosted-play .play-menu-controls-actions-bar
+{
+    background-color: transparent;
+}
+
+/* A single row retains every map; no vertical squishing or wrapped rows. */
+#MapSelectionList
+{
+    height: fill-parent-flow(1);
+    padding: 0px;
+    overflow: clip clip;
+}
+
+#MapSelectionList > .map-selection-list
+{
+    width: 100%;
+    height: 100%;
+    flow-children: right;
+    overflow: scroll clip;
+    horizontal-align: left;
+    padding: 0px 24px;
+}
+
+#MapSelectionList .map-selection-btn
+{
+    height: 90%;
+    max-height: 440px;
+    width: height-percentage(70%);
+    margin: 16px 12px;
+    vertical-align: center;
+}
+
+#MapSelectionList .map-selection-info
+{
+    margin-bottom: 20px;
+    padding: 0px 12px;
+}
+
+#MapSelectionList .map-selection-info__map-name
+{
+    height: fit-children;
+    min-height: 34px;
+    max-height: 80px;
+    white-space: normal;
+    text-overflow: clip;
+    visibility: visible;
+    font-size: 26px;
+}
+
+/* UIKit owns the touch gesture and its indicator; Source keeps its scrollbar
+   model and renders the existing cover panels at the same scroll position. */
+#MapSelectionList HorizontalScrollBar
+{
+    opacity: 0;
+}

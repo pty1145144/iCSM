@@ -6,6 +6,7 @@ id<MTLLibrary> warmProceduralLibrary(NSString *source);
 id<MTLFunction> warmProceduralFunction(id<MTLLibrary> library, NSString *source, NSString *entry);
 id<MTLRenderPipelineState> warmPipeline(Device &d, MTLRenderPipelineDescriptor *descriptor);
 void warmInitialize(Device &d);
+void warmLoadArchive(Device &d);
 void warmForget(Device &d);
 void warmCheckpoint(Device &d, bool force=false);
 }

@@ -310,6 +310,7 @@ return;
 		if ( _m_elContentPanel.BHasClass( 'mainmenu-content--offscreen' ) ) {
 			_m_elContentPanel.RemoveClass( 'mainmenu-content--offscreen' );
 		}
+		$( '#ICSMMenuBlur' ).RemoveClass( 'hidden' );
 
 		$.DispatchEvent( 'ShowContentPanel' );
 		_DimMainMenuBackground( false );
@@ -319,6 +320,7 @@ return;
 	var _OnHideContentPanel = function()
 	{
 		_m_elContentPanel.AddClass( 'mainmenu-content--offscreen' );
+		$( '#ICSMMenuBlur' ).AddClass( 'hidden' );
 
 		                                                     
 		var elActiveNavBarBtn = _GetActiveNavBarButton();
@@ -979,7 +981,7 @@ return null;
 
 	function _GetNotificationBarData()
 	{
-return { color_class: 'NotificationGreen', title: 'ARM64 原生离线模式', tooltip: '本地地图与机器人对战可用；本地基础武器库存可用；Steam 与官方匹配不可用。' };
+return { color_class: 'NotificationGreen', title: 'iCSM', tooltip: 'iCSM' };
 	}
 
 	function _UpdateNotificationBar()
@@ -1000,7 +1002,8 @@ return { color_class: 'NotificationGreen', title: 'ARM64 原生离线模式', to
 		                         
 		if ( notification !== null )
 		{
-			$.FindChildInContext( '#MainMenuNotificationTitle' ).text = notification.title;
+			var titleLabel = $.FindChildInContext( '#MainMenuNotificationTitle' );
+			if ( titleLabel.text !== notification.title ) titleLabel.text = notification.title;
 		}
 
 		_m_elNotificationsContainer.SetHasClass( 'hidden', notification === null );

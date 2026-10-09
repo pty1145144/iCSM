@@ -14,5 +14,17 @@
   "ioapi.h": {
     "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/contrib/minizip/ioapi.h",
     "sha256": "6d2f2c3520dfc3061ea9128a1afb843f5cfe8d7317adcefe3a45884bc06e06a1"
+  },
+  "zip.c": {
+    "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/contrib/minizip/zip.c",
+    "sha256": "213f853d71266ebe8d8335740cfe94b0731009d8fb3f7e6ae01a627398732ec8"
+  },
+  "zip.h": {
+    "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/contrib/minizip/zip.h",
+    "sha256": "99ad45c0b546b5fd0ee3d0819ff057840a892a3d6dbacc85b757a35a43047398"
+  },
+  "crypt.h": {
+    "url": "https://raw.githubusercontent.com/madler/zlib/v1.3.1/contrib/minizip/crypt.h",
+    "sha256": "5c978923cff1e80f76baf437eed699d5b4ad1bf515008d669475d3dd0d89ef70"
   }
 }

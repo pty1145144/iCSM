@@ -2,6 +2,10 @@
 #include <cctype>
 static ConVar icsm_metal_pass_reuse("icsm_metal_pass_reuse","1",FCVAR_RELEASE,"I5 compatible Metal pass reuse; diagnostic A/B switch");
 static ConVar icsm_metal_temporary_reuse("icsm_metal_temporary_reuse","1",FCVAR_RELEASE,"I5 lazy query buffers and cached clear states; diagnostic A/B switch");
+static ConVar icsm_metal_touch_pass_merge("icsm_metal_touch_pass_merge","1",FCVAR_RELEASE,"Draw touch controls in the final presentation pass; diagnostic A/B switch");
+static ConVar icsm_metal_buffer_reuse("icsm_metal_buffer_reuse","1",FCVAR_RELEASE,"Reuse completed vertex/index rename buffers; diagnostic A/B switch");
+static ConVar icsm_metal_csm_discard_dummy("icsm_metal_csm_discard_dummy","0",FCVAR_ARCHIVE | FCVAR_RELEASE,
+    "Discard unused CSM dummy color attachment contents; shadow depth remains stored",true,0,true,1);
 namespace SourceMetal {
 struct PerfRow {
     FrameTiming timing{};
@@ -24,7 +28,9 @@ static const char *perfNames[]={"passes","copies","blits","visibility_allocation
     "clear_depth_allocations","upload_allocations","upload_bytes","waits","pipeline_misses",
     "target_changes","depth_changes","gamma_changes","encoder_ends","color_loads","color_stores",
     "depth_loads","depth_stores","stencil_loads","stencil_stores",
-    "lightmap_shadow_locks","lightmap_uploads","lightmap_upload_bytes","lightmap_invalidations","spatial_upscales","spatial_fallbacks"};
+    "lightmap_shadow_locks","lightmap_uploads","lightmap_upload_bytes","lightmap_invalidations","spatial_upscales","spatial_fallbacks",
+    "buffer_renames","buffer_allocations","buffer_reuses","buffer_preserved_bytes","buffer_rename_cpu_ns","buffer_evictions"};
+static_assert(sizeof(perfNames)/sizeof(perfNames[0])==static_cast<unsigned>(PerfCount::Count),"Performance counter names must match their enum");
 void perfCount(PerfCount kind,unsigned long long amount) {
     if(perfActive && perfInFrame)perfCurrent.counts[static_cast<unsigned>(kind)]+=amount;
 }
@@ -101,6 +107,7 @@ static void perfFinish(Device &d) {
         @"render_size":@[@(d.width),@(d.height)],@"fps_max":@(ConVarRef("fps_max").GetFloat()),
         @"scene_render_percent":@(ConVarRef("icsm_scene_render_percent").GetFloat()),
         @"pass_reuse":@(ConVarRef("icsm_metal_pass_reuse").GetBool()),@"temporary_reuse":@(ConVarRef("icsm_metal_temporary_reuse").GetBool()),
+        @"buffer_reuse":@(icsm_metal_buffer_reuse.GetBool()),
         @"timestamp":[[NSISO8601DateFormatter new] stringFromDate:NSDate.date]};
     NSString *directory=[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/I5/performance"];
     [[NSFileManager defaultManager] createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];

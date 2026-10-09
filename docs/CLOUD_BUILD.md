@@ -31,9 +31,11 @@ Windows 用户可以在 GitHub 上触发云端 ARM64 Mac 编译，下载 IPA，�
 
 ## 3. 导入数据包
 
-下载 **[iCSM-Data.zip（iCloud）](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**，保留文件名，**不要解压数据包 ZIP**。
+也可在设备的系统“文件”中下载配套 ZIP，打开 iCSM 后点击初始页左上角“选择数据包 ZIP”直接选择，无需解压或改名，此方式保留原 ZIP。导入失败可从右上角“导出报错日志”。
 
-在 **Apple Devices → 设备 → 文件 → iCSM** 中添加 `iCSM-Data.zip`。传输完成后，打开游戏并点击“检查并导入”。首次导入请至少预留 **35 GB** 空间，详细步骤见[数据导入指南](BUILD.md)。
+下载 **[iCSM-v1.zip（iCloud）](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**，保留文件名，**不要解压数据包 ZIP**。
+
+在 **Apple Devices → 设备 → 文件 → iCSM** 中添加 `iCSM-v1.zip`。传输完成后，打开游戏并点击“检查并导入”。首次导入请至少预留 **35 GB** 空间，详细步骤见[数据导入指南](BUILD.md)。
 
 ## 在 Mac 本机生成相同产物
 
