@@ -1,0 +1,111 @@
+#include <metal_stdlib>
+#include <metal_common>
+#include <metal_math>
+#include <metal_geometric>
+#include <metal_texture>
+
+using namespace metal;
+
+struct source_main_Uniforms
+{
+	float4 uniforms_float4[1];
+};
+
+struct source_main_Input
+{
+	float4 v0 [[user(texcoord0)]];
+	float4 v1 [[user(texcoord1)]];
+	float4 v2 [[user(texcoord2)]];
+	float4 v3 [[user(texcoord3)]];
+};
+
+struct source_main_Output
+{
+	float4 oC0 [[color(0)]];
+};
+
+fragment source_main_Output source_main (
+ constant float4 &source_alpha [[buffer(30)]],
+	texture2d<float> s0_texture [[texture(0)]],
+	sampler s0 [[sampler(0)]],
+	texture2d<float> s1_texture [[texture(1)]],
+	sampler s1 [[sampler(1)]],
+	constant source_main_Uniforms &uniforms [[buffer(0)]],
+	source_main_Input input [[stage_in]]
+) {
+	source_main_Output output;
+	const float4 c0 = float4(3.187500000e+01, 1.000000000e+00, -5.019608140e-01, 7.739938051e-02); (void) c0;
+	const float4 c1 = float4(9.478672743e-01, 5.213269964e-02, 2.400000095e+00, 4.044999927e-02); (void) c1;
+	const float4 c2 = float4(0.000000000e+00, -2.000000000e+00, 4.000000000e+00, 1.000000000e+00); (void) c2;
+	float4 r0;
+	float4 r1;
+	float4 r2;
+	float4 r3;
+	float4 r4;
+	#define c4 uniforms.uniforms_float4[0]
+	#define v0 input.v0
+	#define v1 input.v1
+	#define v2 input.v2
+	#define v3 input.v3
+	#define oC0 output.oC0
+	r0.x = c2.x;
+	r0.x = dot(v0.zw, c4.xy) + r0.x;
+	r0.y = dot(v0.zw, v0.zw) + c2.x;
+	r1.xy = c4.xy;
+	r0.z = dot(r1.xy, r1.xy) + -c0.y;
+	r0.y = r0.z * r0.y;
+	r0.xy = r0.xy * c2.yz;
+	r0.y = (r0.x * r0.x) + -r0.y;
+	r1.x = max(r0.y, c2.x);
+	r0.y = ((r1.x == 0.0) ? FLT_MAX : rsqrt(abs(r1.x)));
+	r0.y = ((r0.y == 0.0) ? FLT_MAX : 1.0 / r0.y);
+	r0.w = ((-r0.z >= 0.0) ? c2.x : c2.w);
+	r1.x = ((r0.z >= 0.0) ? -c2.x : -c2.w);
+	r0.z = r0.z + r0.z;
+	r0.z = ((r0.z == 0.0) ? FLT_MAX : 1.0 / r0.z);
+	r0.w = r0.w + r1.x;
+	r0.x = (r0.w * r0.y) + -r0.x;
+	r0.x = clamp(r0.z * r0.x, 0.0, 1.0);
+	r1 = v1;
+	r1 = -r1 + v2;
+	r0 = (r0.xxxx * r1) + v1;
+	r1 = s0_texture.sample(s0, v0.xy);
+	r1.z = (r1.z * c0.x) + c0.y;
+	r1.z = ((r1.z == 0.0) ? FLT_MAX : 1.0 / r1.z);
+	r1.xy = r1.yx + c0.zz;
+	r2.x = (r1.y * -r1.z) + r1.w;
+	r3.yz = (r1.yx * r1.zz) + r1.ww;
+	r3.w = (r1.x * -r1.z) + r2.x;
+	r3.x = (r1.x * -r1.z) + r3.y;
+	r1.xyz = (r3.xzw * c1.xxx) + c1.yyy;
+	r2.x = log2(r1.x);
+	r2.y = log2(r1.y);
+	r2.z = log2(r1.z);
+	r1.xyz = r2.xyz * c1.zzz;
+	r1.x = exp2(r1.x);
+	r2.xyz = r3.xzw * c0.www;
+	r3.xyz = -r3.xzw + c1.www;
+	r4.x = ((r3.x >= 0.0) ? r2.x : r1.x);
+	r1.x = exp2(r1.y);
+	r1.y = exp2(r1.z);
+	r4.y = ((r3.y >= 0.0) ? r2.y : r1.x);
+	r4.z = ((r3.z >= 0.0) ? r2.z : r1.y);
+	r4.w = c0.y;
+	r0 = r0 * r4;
+	r1 = s1_texture.sample(s1, v3.xy);
+	r1 = r0 * r1.wwww;
+	oC0 = mix(r0, r1, c4.zzzz);
+	#undef c4
+	#undef v0
+	#undef v1
+	#undef v2
+	#undef v3
+	#undef oC0
+	if (source_alpha.x != 0.0) {
+ float a=output.oC0.a, ref=source_alpha.y; uint fn=uint(source_alpha.z);
+ bool pass=fn==1 ? false : fn==2 ? a<ref : fn==3 ? a==ref : fn==4 ? a<=ref : fn==5 ? a>ref : fn==6 ? a!=ref : fn==7 ? a>=ref : true;
+ if (!pass) discard_fragment();
+}
+return output;
+}
+

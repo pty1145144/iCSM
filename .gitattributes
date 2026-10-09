@@ -5,3 +5,5 @@
 /icsm text eol=lf
 *.py text eol=lf
 *.yml text eol=lf
+# Captured MSL bytes determine cache keys, including their trailing blank lines.
+/Data/shaders/*.metal -text whitespace=-blank-at-eof

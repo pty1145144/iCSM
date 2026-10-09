@@ -8,6 +8,8 @@ This source kit targets iPhone and iPad. The native Source game modules, SDL, an
 
 Use the [GitHub Actions cloud build guide](CLOUD_BUILD.en.md) to build from Windows without a local Mac, then sign and install the IPA with your own account. The local Xcode build below requires macOS.
 
+For **both IPA and matching data from GitHub**, use [Build iCSM IPA + Data](DATA_BUILD.md). It rebuilds Metal libraries from the included MSL and packages GitHub-hosted resource inputs. Use its paired Release ZIP instead of the frozen iCloud package described below.
+
 ## 1. Build and install on a Mac
 
 Requirements: macOS, Xcode with the iPhoneOS 27.x SDK, Python 3, and an internet connection for the first installation of pinned CMake and Ninja versions. The minimum device OS is iOS / iPadOS 27.0. Windows can transfer game data; it cannot run the Xcode build.
@@ -35,7 +37,7 @@ The IPA contains ARM64 iOS modules and does not depend on Rosetta or runtime CPU
 
 **Computer file sharing:**
 
-**Game data download: [iCSM-v1.zip (iCloud)](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**.
+**Full GitHub builds:** [combine the data volumes](DATA_BUILD.md#combine-and-install) from the same Release as your IPA. **Original app-only builds:** download [iCSM-v1.zip (iCloud)](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA).
 
 You can open the installed app before importing data; it will show the import instructions. Keep the filename exactly `iCSM-v1.zip`. Do not extract the archive on your computer.
 

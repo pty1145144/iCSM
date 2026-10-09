@@ -14,7 +14,9 @@ This update brings the iPhone / iPad source snapshot from Build 86 to **0.7.2 (B
 - MetalFX spatial upscaling and 60→120 frame interpolation remain available on supported devices. FPS, frame interpolation, motion blur and weapon quality are separate controls; frame rates depend on the device and scene.
 - The app icon, loading progress view and startup announcement are updated. A fresh installation uses the player name `icsmer`, which can be changed with the system keyboard.
 
-The minimum OS remains **iOS / iPadOS 27.0**, and the build requires the **iPhoneOS 27.x SDK**. This update does not add support for iOS 26. Game data remain a separate [iCloud download](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA); the repository contains the mobile build inputs and app resources, without the full map/model/texture package or personal signing configuration.
+The minimum OS remains **iOS / iPadOS 27.0**, and the build requires the **iPhoneOS 27.x SDK**. This update does not add support for iOS 26. The original frozen data remain available via [iCloud](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA).
+
+The subsequent **GitHub-only data build** addition includes 7,906 actual MSL sources, resource catalogs and packaging scripts. Large resource inputs are uploaded to Releases; **Build iCSM IPA + Data** creates matched app/data exports. See the [guide](DATA_BUILD.md). No local build was run for this addition and the new full-data workflow has not been executed; the successful run below verifies only the existing app-only workflow.
 
 Build instructions: [Mac](BUILD.en.md) · [Windows / GitHub Actions](CLOUD_BUILD.en.md).
 
@@ -38,7 +40,9 @@ Build instructions: [Mac](BUILD.en.md) · [Windows / GitHub Actions](CLOUD_BUILD
 - 支持设备继续提供 MetalFX 空间超分和 60→120 插帧。帧率、插帧、动态模糊、武器画质可独立选择，实际帧率取决于设备及场景。
 - 更新应用图标、加载进度界面和启动公告。全新安装默认昵称为 `icsmer`，可通过系统键盘改名。
 
-最低系统仍为 **iOS / iPadOS 27.0**，编译需要 **iPhoneOS 27.x SDK**；本次没有加入 iOS 26 支持。游戏数据仍通过独立的 [iCloud 链接](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)提供。仓库包含移动端编译输入及应用资源，不包含完整地图／模型／贴图数据包和个人签名配置。
+最低系统仍为 **iOS / iPadOS 27.0**，编译需要 **iPhoneOS 27.x SDK**；本次没有加入 iOS 26 支持。原冻结数据版本继续通过 [iCloud 链接](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)提供。
+
+随后新增的 **GitHub 完整数据构建**包含 7,906 份真实 MSL、资源校验清单和打包脚本。大资源输入在 Releases，**Build iCSM IPA + Data** 用于生成配套 IPA 与数据包，见[指南](DATA_BUILD.md#简体中文)。该新增流程未执行本地构建，也尚未运行云端；下方成功记录仅证明原 IPA 工作流。
 
 编译说明：[Mac](BUILD.md) · [Windows / GitHub Actions](CLOUD_BUILD.md)。
 

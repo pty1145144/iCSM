@@ -1,0 +1,81 @@
+#include <metal_stdlib>
+#include <metal_common>
+#include <metal_math>
+#include <metal_geometric>
+#include <metal_texture>
+
+using namespace metal;
+
+struct source_main_Uniforms
+{
+	float4 uniforms_float4[5];
+};
+
+struct source_main_Input
+{
+	float4 t0 [[user(texcoord0)]];
+	float4 t1 [[user(texcoord1)]];
+	float4 t7 [[user(texcoord7)]];
+};
+
+struct source_main_Output
+{
+	float4 oC0 [[color(0)]];
+};
+
+fragment source_main_Output source_main (
+ constant float4 &source_alpha [[buffer(30)]],
+	texture2d<float> s0_texture [[texture(0)]],
+	sampler s0 [[sampler(0)]],
+	texture2d<float> s1_texture [[texture(1)]],
+	sampler s1 [[sampler(1)]],
+	constant source_main_Uniforms &uniforms [[buffer(0)]],
+	source_main_Input input [[stage_in]]
+) {
+	source_main_Output output;
+	float4 r0;
+	float4 r1;
+	float4 r2;
+	float4 r3;
+	#define c1 uniforms.uniforms_float4[0]
+	#define c11 uniforms.uniforms_float4[1]
+	#define c12 uniforms.uniforms_float4[2]
+	#define c29 uniforms.uniforms_float4[3]
+	#define c30 uniforms.uniforms_float4[4]
+	#define t0 input.t0
+	#define t1 input.t1
+	#define t7 input.t7
+	#define oC0 output.oC0
+	r0 = s0_texture.sample(s0, t0.xy);
+	r1 = s1_texture.sample(s1, t1.xy);
+	r2.xyz = -t7.xyz + c11.xyz;
+	r2.x = dot(r2.xyz, r2.xyz);
+	r2.x = ((r2.x == 0.0) ? FLT_MAX : rsqrt(abs(r2.x)));
+	r2.x = ((r2.x == 0.0) ? FLT_MAX : 1.0 / r2.x);
+	r2.x = clamp((r2.x * c12.w) + c12.x, 0.0, 1.0);
+	r3.w = min(r2.x, c12.z);
+	r2.x = r3.w * r3.w;
+	r0 = r0 * r1;
+	r0 = r0 * c1;
+	r1.xyz = r0.xyz * c30.xxx;
+	r1.w = c30.x;
+	r2.yzw = (r0.zyx * -r1.www) + c29.zyx;
+	r0.xyz = (r2.xxx * r2.wzy) + r1.xyz;
+	oC0 = r0;
+	#undef c1
+	#undef c11
+	#undef c12
+	#undef c29
+	#undef c30
+	#undef t0
+	#undef t1
+	#undef t7
+	#undef oC0
+	if (source_alpha.x != 0.0) {
+ float a=output.oC0.a, ref=source_alpha.y; uint fn=uint(source_alpha.z);
+ bool pass=fn==1 ? false : fn==2 ? a<ref : fn==3 ? a==ref : fn==4 ? a<=ref : fn==5 ? a>ref : fn==6 ? a!=ref : fn==7 ? a>=ref : true;
+ if (!pass) discard_fragment();
+}
+return output;
+}
+

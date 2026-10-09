@@ -4,6 +4,8 @@
 
 Windows 用户可以在 GitHub 上触发云端 ARM64 Mac 编译，下载 IPA，再在本机签名安装。此流程无需本地 Mac；云端使用 Xcode 27，从仓库源码编译全部 35 个原生框架。设备需要 **iOS / iPadOS 27.0 或更新版本**。
 
+需要**仅通过 GitHub 生成 IPA 和数据包**时，运行新工作流 **Build iCSM IPA + Data**，按[完整指南](DATA_BUILD.md#简体中文)操作。新流程会重新编译 7,906 份着色器并将配套数据包放到 Releases。下方原 IPA 流程仍配合冻结 iCloud 包使用；此前成功记录不代表新完整流程已验证。
+
 ## 1. 在 GitHub 编译
 
 1. 打开自己的 Fork，或有权限运行工作流的仓库副本。

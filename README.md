@@ -20,7 +20,9 @@ See the [Build 149 update notes](docs/UPDATES.md#english) for the changes since 
 
 ## Build and install
 
-**Windows / cloud builds:** follow the [cloud build and Windows installation guide](docs/CLOUD_BUILD.en.md) to build an IPA in GitHub Actions, then sign it with your own Apple account. The commands below are for local Mac builds.
+**Build both files using GitHub:** run **Actions → Build iCSM IPA + Data** to compile the IPA and matching Metal shaders and publish the paired data package in Releases. Download all data volumes and use `join_data.py` to get `iCSM-v1.zip`. See the [GitHub-only build guide](docs/DATA_BUILD.md), including private-input access for forks. The new full-data workflow has not yet been run; no local build verification was performed for its addition.
+
+**Windows / app-only cloud builds:** the existing [cloud build guide](docs/CLOUD_BUILD.en.md) remains available for the frozen iCloud data distribution. Sign the IPA with your own Apple account. The commands below are for local Mac builds.
 
 Requires **macOS, Xcode with the iPhoneOS 27.x SDK, and Python 3**. The device must run **iOS / iPadOS 27.0 or later**. Sign in to your own Apple account in **Xcode → Settings → Accounts**, connect and unlock your device, and enable Developer Mode.
 
@@ -38,7 +40,9 @@ Replace the Team ID, Bundle ID, and device ID with your own values. Use `./icsm 
 
 ## Game data and first launch
 
-**Download the game data: [iCSM-v1.zip (iCloud)](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**. Do not extract it. File-sharing imports require the filename `iCSM-v1.zip`; the file picker also accepts renamed copies of the matching package.
+For a full GitHub build, use **the data from the same generated Release as your IPA** and [combine its volumes](docs/DATA_BUILD.md). GitHub now hosts the resource inputs, packaging scripts and 7,906 actual Metal shader sources. Original map/model authoring projects are not included.
+
+For the original app-only workflow, **download [iCSM-v1.zip (iCloud)](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**. Do not extract it. File-sharing imports require the filename `iCSM-v1.zip`; the file picker also accepts renamed copies of the matching package.
 
 The app and game data are distributed separately. On the initial screen, tap **“选择数据包 ZIP” (Select Data ZIP)** and select the downloaded package from Files (On My iPhone / iPad or iCloud Drive). No extraction or manual move into the app directory is needed; this method preserves the original ZIP. Failed imports can be diagnosed with **“导出报错日志” (Export Error Logs)** at the top right.
 
@@ -79,7 +83,9 @@ This is a personal port. **Commercial use is prohibited.** CSGO, the Source engi
 
 ## 编译与安装
 
-**Windows / 云编译：** 按[云编译与 Windows 安装指南](docs/CLOUD_BUILD.md)，在 GitHub Actions 生成 IPA，再用自己的 Apple 账户签名安装。下方命令用于 Mac 本机编译。
+**仅通过 GitHub 生成两个文件：** 运行 **Actions → Build iCSM IPA + Data**，重新编译 IPA 和配套着色器、生成数据包并放到 GitHub Releases。下载所有数据分卷，用 `join_data.py` 合并为 `iCSM-v1.zip`。操作和 Fork 权限说明见 [完整指南](docs/DATA_BUILD.md#简体中文)。新完整流程尚未运行，本次没有执行本地构建验证。
+
+**Windows / 仅编译 IPA：** 原有[云编译指南](docs/CLOUD_BUILD.md)保留，配合原冻结 iCloud 数据包使用。IPA 需用自己的 Apple 账户签名安装。下方命令用于 Mac 本机编译。
 
 需要 **macOS、Xcode（iPhoneOS 27.x SDK）、Python 3**，设备系统至少为 **iOS / iPadOS 27.0**。先在 Xcode → Settings → Accounts 登录自己的 Apple 账户，连接并解锁设备，开启开发者模式。
 
@@ -97,7 +103,9 @@ This is a personal port. **Commercial use is prohibited.** CSGO, the Source engi
 
 ## 导入数据与首次启动
 
-**数据包下载：[iCSM-v1.zip（iCloud）](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)**。无需解压。电脑文件共享导入须保留文件名 `iCSM-v1.zip`；系统文件选择器也接受改名后的配套数据包。
+完整 GitHub 构建请使用**同一次 Release 中的 IPA 与数据包**，按[指南](docs/DATA_BUILD.md#简体中文)合并分卷。GitHub 已包含资源输入、打包源码和 7,906 份真实 Metal 着色器源码；没有地图／模型原始制作工程。
+
+原 IPA 单独编译流程的数据下载：[iCSM-v1.zip（iCloud）](https://www.icloud.com/iclouddrive/039w_r3_mnpuCiw9Ecvmvr7zA)。无需解压。电脑文件共享导入须保留文件名 `iCSM-v1.zip`；系统文件选择器也接受改名后的配套数据包。
 
 应用与游戏数据分开提供。初始页点击左上角 **“选择数据包 ZIP”**，从系统“文件”的“我的 iPhone / iPad”或 iCloud Drive 选择已下载的数据包，无需解压或手动搬入应用目录，此方式保留原 ZIP。导入失败时，可直接点击右上角 **“导出报错日志”** 查看原因。
 

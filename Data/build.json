@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "repository": "zktfjcksxk-spec/iCSM",
+  "tag": "data-inputs-v1-20261009",
+  "format": "tar.gz",
+  "parts": [
+    {
+      "name": "resources.tar.gz.part001",
+      "size": 1073741824,
+      "sha256": "acf06f674c4265007d65d8c359040686b10ba32acd721ed8d6b56af4bdcff407"
+    },
+    {
+      "name": "resources.tar.gz.part002",
+      "size": 1073741824,
+      "sha256": "51111ee039a5e935e1937923d61802225e606c13f519dfc1bb81914d7ad36d34"
+    },
+    {
+      "name": "resources.tar.gz.part003",
+      "size": 1073741824,
+      "sha256": "f6df9e750d36da65632e1530cae588821c31ea04ce2bfea28e803d7937864448"
+    },
+    {
+      "name": "resources.tar.gz.part004",
+      "size": 1073741824,
+      "sha256": "86d873e8e685647ebe94529af86aca3f59fc59590326bea4f2d6aa9df288a853"
+    },
+    {
+      "name": "resources.tar.gz.part005",
+      "size": 1073741824,
+      "sha256": "114b2f077b4c7999e3cbba98c3aeeab8e245b7116592e7b98b3ede2551a94e83"
+    },
+    {
+      "name": "resources.tar.gz.part006",
+      "size": 1073741824,
+      "sha256": "ac2aa848a7a91d21e5606e6c25516aab91315bb190e2ae1fa5da557b9a28430e"
+    },
+    {
+      "name": "resources.tar.gz.part007",
+      "size": 1073741824,
+      "sha256": "13b5a2777407613fc605aa223a972dcaeaf3bd2ac89fad484844e8d8aec0c5f8"
+    },
+    {
+      "name": "resources.tar.gz.part008",
+      "size": 1073741824,
+      "sha256": "080b5b77ce5b68a446c6f2e1ccb3a25fc3dec39a8a0333c6340f4ad59a1c3354"
+    },
+    {
+      "name": "resources.tar.gz.part009",
+      "size": 1073741824,
+      "sha256": "e6fbb3f610c491ef9625d57e1f3b96bceb6c4c23361668d5a830719b7e998b56"
+    },
+    {
+      "name": "resources.tar.gz.part010",
+      "size": 1073741824,
+      "sha256": "93eaf6ef9a52dd798ec205452d1b4cb2880b469a7fa0240c363ab7f875ef01a4"
+    },
+    {
+      "name": "resources.tar.gz.part011",
+      "size": 310644087,
+      "sha256": "ae6cc1bfbceee3ba2c4030c696025b22085602a64706da450f72ccdf1bbd6680"
+    }
+  ],
+  "archive_sha256": "4c8a4912dce6f0085ce056e374e1d2c8dab5019752a82161e80a76c0642a7280",
+  "archive_bytes": 11048062327,
+  "file_count": 4792,
+  "total_bytes": 19574894733
+}

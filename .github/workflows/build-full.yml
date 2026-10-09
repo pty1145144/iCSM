@@ -1,0 +1,126 @@
+name: Build iCSM IPA + Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: App Bundle ID (your signing tool can change it later)
+        required: true
+        default: com.icsm.client
+        type: string
+      jobs:
+        description: Native compiler jobs (2 recommended)
+        required: true
+        default: '2'
+        type: choice
+        options: ['1', '2', '3']
+      data_repository:
+        description: GitHub repository holding the resource input release
+        required: true
+        default: zktfjcksxk-spec/iCSM
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: icsm-full-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  app:
+    runs-on: xcode-27
+    timeout-minutes: 240
+    env:
+      PYTHONUNBUFFERED: '1'
+      ICSM_BUNDLE_ID: ${{ inputs.bundle_id }}
+      ICSM_BUILD_JOBS: ${{ inputs.jobs }}
+    steps:
+      - name: Check out mobile source and MSL
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compile Metal shader libraries and matching manifest
+        run: |
+          set -o pipefail
+          mkdir -p Build
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          if ! xcrun --sdk iphoneos metal --version; then
+            xcodebuild -downloadComponent metalToolchain
+            xcrun --kill-cache
+          fi
+          xcrun --sdk iphoneos metal --version
+          python3 scripts/build_data.py shaders --jobs 2 2>&1 | tee Build/shader-build.log
+
+      - name: Build native frameworks and export matching IPA
+        run: |
+          set -o pipefail
+          ./icsm build --unsigned --bundle-id "$ICSM_BUNDLE_ID" --jobs "$ICSM_BUILD_JOBS" 2>&1 | tee Build/cloud-build.log
+          python3 scripts/verify_ipa.py Build/iCSM-unsigned.ipa --unsigned --data-manifest Build/data/distribution-assets.json --report Build/ipa-report.json
+
+      - name: Transfer app and compiled shaders to data job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iCSM-full-build-intermediate
+          path: |
+            Build/iCSM-unsigned.ipa
+            Build/iCSM.entitlements
+            Build/ipa-report.json
+            Build/data/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iCSM-full-build-log
+          path: Build/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  data:
+    needs: app
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    env:
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - name: Check out data builder
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download matching app and Metal libraries
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: iCSM-full-build-intermediate
+          path: Build
+
+      - name: Stream resource inputs from GitHub and assemble data
+        env:
+          GH_TOKEN: ${{ secrets.DATA_RELEASE_TOKEN || github.token }}
+          ICSM_DATA_REPOSITORY: ${{ inputs.data_repository }}
+        run: |
+          set -o pipefail
+          df -h .
+          python3 scripts/build_data.py package --repository "$ICSM_DATA_REPOSITORY" 2>&1 | tee Build/data-package.log
+
+      - name: Publish paired IPA and data volumes on GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_full_build.py
+
+      - name: Upload data job log on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iCSM-data-build-log
+          path: Build/data-package.log
+          if-no-files-found: ignore
+          retention-days: 7

@@ -41,7 +41,7 @@ def macho(data, name):
     return dependencies
 
 
-def verify(ipa, unsigned=False):
+def verify(ipa, unsigned=False, data_manifest=None):
     expected = set(json.loads((ROOT / 'native-build-plan.json').read_text())['frameworks'])
     with zipfile.ZipFile(ipa) as archive:
         names = archive.namelist()
@@ -83,6 +83,10 @@ def verify(ipa, unsigned=False):
                          'Assets.car', 'native-ui/panorama/layout/mainmenu.xml',
                          'native-ui/panorama/scripts/inventory_offline.js']:
             require(base + resource in names, 'Missing app resource: ' + resource)
+        distribution = json.loads(archive.read(base + 'distribution-assets.json'))
+        if data_manifest:
+            require(distribution == json.loads(data_manifest.read_text()),
+                    'IPA embeds a different data manifest; app and data must come from the same build')
         require(archive.testzip() is None, 'ZIP CRC validation failed')
         if unsigned:
             require(not any(name.endswith(('.mobileprovision', '.p12', '.pfx', '.keychain')) for name in names),
@@ -98,6 +102,7 @@ def verify(ipa, unsigned=False):
               'bundle_id': info['CFBundleIdentifier'], 'frameworks': len(frameworks),
               'verified_arm64_ios_binaries': len(executables),
               'signing': 'ad-hoc; personal re-signing required' if unsigned else 'local Apple signing',
+              'data_identity': distribution['identity'], 'shader_count': distribution['shader_count'],
               'source_commit': os.environ.get('GITHUB_SHA', '')}
     return result
 
@@ -107,8 +112,9 @@ if __name__ == '__main__':
     parser.add_argument('ipa', type=Path)
     parser.add_argument('--unsigned', action='store_true')
     parser.add_argument('--report', type=Path)
+    parser.add_argument('--data-manifest', type=Path)
     args = parser.parse_args()
-    report = verify(args.ipa, args.unsigned)
+    report = verify(args.ipa, args.unsigned, args.data_manifest)
     text = json.dumps(report, indent=2) + '\n'
     if args.report:
         args.report.write_text(text)

@@ -4,6 +4,8 @@ English | [简体中文](CLOUD_BUILD.md)
 
 Windows users can trigger a source build on a GitHub-hosted ARM64 Mac, download the IPA, and sign and install it locally. You do not need a local Mac for this workflow. The cloud build uses Xcode 27 and compiles all 35 native frameworks from this repository's sources. The device must run **iOS / iPadOS 27.0 or later**.
 
+To generate **both IPA and data entirely from GitHub**, use **Build iCSM IPA + Data** and the [full guide](DATA_BUILD.md). It recompiles 7,906 shaders and exports matching data in Releases. The app-only workflow below uses the frozen iCloud distribution. Its previous successful runs do not validate the new full-data workflow.
+
 ## 1. Build on GitHub
 
 1. Open your fork or another copy of this repository that you have permission to run workflows in.
