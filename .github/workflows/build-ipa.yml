@@ -37,21 +37,27 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Patch icsm.py for iOS 16 deployment
+      - name: Patch icsm.py & verify_ipa.py for iOS 16 deployment
         run: |
           set -o pipefail
           # 1. Override deployment target 27.0 -> 16.0
           sed -i '' 's/-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0/-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0/g' icsm.py
 
-          # 2. Disable mandatory iPhoneOS 27.x SDK check
+          # 2. Disable mandatory iPhoneOS 27.x SDK check in icsm.py
           sed -i '' "s/if '27.' not in output(\['xcrun', '--sdk', 'iphoneos', '--show-sdk-version'\]):/if False: # skipped SDK check/g" icsm.py
 
+          # 3. 【新增】屏蔽 verify_ipa.py 的 MinimumOSVersion >=27 校验
+          sed -i '' 's/require(float(info\['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'')/# require(float(info['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'') # patched for iOS16/g' scripts/verify_ipa.py
+
           echo "=== Patch verification ==="
-          echo "Deployment target:"
+          echo "Deployment target in icsm.py:"
           grep -o "CMAKE_OSX_DEPLOYMENT_TARGET=.*" icsm.py || true
           echo ""
-          echo "SDK check line:"
+          echo "SDK check line in icsm.py:"
           grep -n "skipped SDK check" icsm.py || true
+          echo ""
+          echo "verify_ipa.py patched line:"
+          grep -n "patched for iOS16" scripts/verify_ipa.py || true
           echo "=========================="
 
       - name: Check Apple toolchain
