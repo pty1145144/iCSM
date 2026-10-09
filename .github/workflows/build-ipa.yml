@@ -1,5 +1,4 @@
 name: Build iCSM IPA
-
 on:
   workflow_dispatch:
     inputs:
@@ -14,14 +13,11 @@ on:
         default: '2'
         type: choice
         options: ['1', '2', '3']
-
 permissions:
   contents: read
-
 concurrency:
   group: icsm-ipa-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: xcode-27
@@ -30,12 +26,12 @@ jobs:
       PYTHONUNBUFFERED: '1'
       ICSM_BUNDLE_ID: ${{ inputs.bundle_id }}
       ICSM_BUILD_JOBS: ${{ inputs.jobs }}
+      IPHONEOS_DEPLOYMENT_TARGET: '16.0' # 新增：强制最低兼容 iOS 16.0
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - name: Check Apple toolchain
         run: |
           test "$(uname -m)" = arm64
@@ -43,13 +39,25 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version
           python3 --version
           df -h .
-
       - name: Compile native modules and export IPA
         run: |
           set -o pipefail
           mkdir -p Build
           ./icsm build --unsigned --bundle-id "$ICSM_BUNDLE_ID" --jobs "$ICSM_BUILD_JOBS" 2>&1 | tee Build/cloud-build.log
-
+      - name: Verify iOS deployment target
+        run: |
+          # 解压 IPA 读取 Info.plist 验证最低系统版本
+          unzip -q -o Build/iCSM-unsigned.ipa -d Build/ipa-tmp
+          PLIST_PATH=$(find Build/ipa-tmp/Payload -name "Info.plist" -path "*.app/*" | head -n 1)
+          echo "Minimum iOS version in IPA:"
+          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$PLIST_PATH"
+          # 版本不符则直接报错终止
+          MIN_VER=$(/usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$PLIST_PATH")
+          if [ "$MIN_VER" != "16.0" ]; then
+            echo "::error::Deployment target mismatch! Expected 16.0, got $MIN_VER"
+            exit 1
+          fi
+          rm -rf Build/ipa-tmp
       - name: Verify app and all 35 frameworks
         run: |
           python3 scripts/verify_ipa.py Build/iCSM-unsigned.ipa --unsigned --report Build/ipa-report.json
@@ -65,7 +73,6 @@ jobs:
           See **docs/CLOUD_BUILD.en.md** for Windows installation and data import.
           TEXT
           cat Build/ipa-report.json >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload IPA and verification report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -78,7 +85,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
-
       - name: Upload build log if the build fails
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
