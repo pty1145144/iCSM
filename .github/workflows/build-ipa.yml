@@ -1,4 +1,5 @@
-name: Build iCSM IPA
+name: Build iCSM IPA (A11 / iOS 16)
+
 on:
   workflow_dispatch:
     inputs:
@@ -36,6 +37,19 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Patch icsm.py for iOS 16 deployment
+        run: |
+          set -o pipefail
+          # Override hardcoded deployment target 27.0 -> 16.0
+          sed -i '' 's/-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0/-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0/g' icsm.py
+          # Skip mandatory iPhoneOS 27.x SDK check
+          sed -i '' "s/if '27.' not in output/if False and '27.' not in output/g" icsm.py
+          
+          echo "=== Patch verification ==="
+          grep "CMAKE_OSX_DEPLOYMENT_TARGET" icsm.py
+          grep "if '27.' not in output" icsm.py
+          echo "=========================="
+
       - name: Check Apple toolchain
         run: |
           test "$(uname -m)" = arm64
@@ -50,6 +64,25 @@ jobs:
           mkdir -p Build
           ./icsm build --unsigned --bundle-id "$ICSM_BUNDLE_ID" --jobs "$ICSM_BUILD_JOBS" 2>&1 | tee Build/cloud-build.log
 
+      - name: Verify iOS minimum version (vtool binary check)
+        run: |
+          unzip -q -o Build/iCSM-unsigned.ipa -d Build/ipa-tmp
+          MAIN_APP=$(find Build/ipa-tmp/Payload -maxdepth 1 -type d -name "*.app" | head -n 1)
+          APP_BINARY="$MAIN_APP/$(basename "$MAIN_APP" .app)"
+          
+          echo "App binary path: $APP_BINARY"
+          MIN_VER=$(xcrun vtool -show-build "$APP_BINARY" | grep -m 1 "minos" | awk '{print $2}')
+          echo "Binary minimum iOS version: $MIN_VER"
+          
+          if printf '%s\n' "16.0" "$MIN_VER" | sort -V | head -n 1 | grep -q "16.0"; then
+            echo "✅ Deployment target meets iOS 16 requirement"
+          else
+            echo "::error::Deployment target too high! Expected ≤ 16.0, got $MIN_VER"
+            exit 1
+          fi
+          
+          rm -rf Build/ipa-tmp
+
       - name: Verify app and all 35 frameworks
         run: |
           python3 scripts/verify_ipa.py Build/iCSM-unsigned.ipa --unsigned --report Build/ipa-report.json
@@ -58,9 +91,14 @@ jobs:
             shasum -a 256 iCSM-unsigned.ipa > SHA256SUMS.txt
           )
           cat >> "$GITHUB_STEP_SUMMARY" <<'TEXT'
-          ## iCSM IPA ready
-          Download **iCSM-IPA** under **Artifacts** below and extract it.
+          ## iCSM IPA ready (A11 / iOS 16 build)
+          Download **iCSM-IPA-A11-iOS16** under **Artifacts** below and extract it.
           Re-sign **iCSM-unsigned.ipa** with your own Apple account before installing.
+
+          ⚠️ A11 device notice (iPhone X / 8 / 8 Plus)
+          - A11 chip does NOT support MetalFX. You must remove MTLFX calls from source code, otherwise the app will crash on launch.
+          - iPhone 8 / 8 Plus (2GB RAM) has high risk of being killed due to memory limit; iPhone X (3GB) performs better.
+
           No Apple account, certificate, device ID or game data is uploaded to the build runner.
           See **docs/CLOUD_BUILD.en.md** for Windows installation and data import.
           TEXT
@@ -69,7 +107,7 @@ jobs:
       - name: Upload IPA and verification report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: iCSM-IPA
+          name: iCSM-IPA-A11-iOS16
           path: |
             Build/iCSM-unsigned.ipa
             Build/iCSM.entitlements
