@@ -1,4 +1,4 @@
-name: Build iCSM IPA (A11‑iOS16)
+name: Build iCSM IPA
 on:
   workflow_dispatch:
     inputs:
