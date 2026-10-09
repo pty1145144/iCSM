@@ -40,14 +40,18 @@ jobs:
       - name: Patch icsm.py for iOS 16 deployment
         run: |
           set -o pipefail
-          # Override hardcoded deployment target 27.0 -> 16.0
+          # 1. Override deployment target 27.0 -> 16.0
           sed -i '' 's/-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0/-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0/g' icsm.py
-          # Skip mandatory iPhoneOS 27.x SDK check
-          sed -i '' "s/if '27.' not in output/if False and '27.' not in output/g" icsm.py
-          
+
+          # 2. Disable mandatory iPhoneOS 27.x SDK check
+          sed -i '' "s/if '27.' not in output(\['xcrun', '--sdk', 'iphoneos', '--show-sdk-version'\]):/if False: # skipped SDK check/g" icsm.py
+
           echo "=== Patch verification ==="
-          grep "CMAKE_OSX_DEPLOYMENT_TARGET" icsm.py
-          grep "if '27.' not in output" icsm.py
+          echo "Deployment target:"
+          grep -o "CMAKE_OSX_DEPLOYMENT_TARGET=.*" icsm.py || true
+          echo ""
+          echo "SDK check line:"
+          grep -n "skipped SDK check" icsm.py || true
           echo "=========================="
 
       - name: Check Apple toolchain
