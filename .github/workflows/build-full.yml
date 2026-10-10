@@ -52,9 +52,10 @@ jobs:
           sed -i '' 's/require(float(info\['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'')/# require(float(info['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'') # patched for iOS16/g' scripts/verify_ipa.py
           # 3. build_data.py: skip iPhoneOS 27.x SDK requirement (A11 uses iOS 16)
           sed -i '' "s/require(sdk_version.split('\.')\[0\] == '27', 'This mobile release requires the iPhoneOS 27\.x SDK')/require(True, 'SDK check skipped for iOS16')/g" scripts/build_data.py
-          # 4. Data/shaders.json: compile Metal for iOS 16, language 3.2 -> 2.4
+          # 4. Data/shaders.json: compile Metal for iOS 16, language 3.2 -> 2.4.
+          #    CLI -std needs the platform prefix (ios-metal2.4); bare metal2.4 is invalid.
           sed -i '' 's/air64-apple-ios27\.0/air64-apple-ios16.0/g' Data/shaders.json
-          sed -i '' 's/-std=metal3\.2/-std=metal2.4/g' Data/shaders.json
+          sed -i '' 's/-std=metal3\.2/-std=ios-metal2.4/g' Data/shaders.json
           # 5. Disable MetalFX (A11 chip does not support MetalFX)
           find Sources -type f \( -name "*.mm" -o -name "*.m" -o -name "*.h" \) \
             -exec sed -i '' 's/useMetalFX = YES/useMetalFX = NO/g' {} +
