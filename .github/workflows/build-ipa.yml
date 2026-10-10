@@ -102,6 +102,33 @@ jobs:
           echo "==================================================="
       # ========================================================
 
+      # ========== 新增：iOS 17 专属 UIKit API 降级兼容（A11 / iOS 16） ==========
+      - name: Patch iOS 17-only UIKit APIs for iOS 16 (effectiveGeometry)
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          # UIWindowScene.effectiveGeometry is iOS 17+; iPhone X runs iOS 16 and
+          # crashes with "unrecognized selector" at launch.
+          # 1. Size sampling -> scene.screen.bounds (iOS 13+)
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/scene\.effectiveGeometry\.coordinateSpace\.bounds\.size/scene.screen.bounds.size/g' {} +
+          # 2. Interactive resize probe -> always false on iOS 16
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/window\.windowScene\.effectiveGeometry\.isInteractivelyResizing/false/g' {} +
+          # 3. Window-scene orientation -> UIDevice orientation (same raw values)
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/window\.windowScene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
+          # 4. Scene orientation lock -> NO
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/scene\.effectiveGeometry\.interfaceOrientationLocked/NO/g' {} +
+          # 5. Scene orientation -> UIDevice orientation
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/scene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
+          echo "=== iOS 17 API patch verification ==="
+          grep -rn "effectiveGeometry" Sources --include="*.mm" --include="*.inc" | grep -v "//" || echo "No effectiveGeometry remaining OK"
+          echo "=============================================="
+      # ========================================================
+
       - name: Check Apple toolchain
         run: |
           test "$(uname -m)" = arm64
