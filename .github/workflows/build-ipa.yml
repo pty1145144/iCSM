@@ -1,5 +1,4 @@
 name: Build iCSM IPA (A11 / iOS 16)
-
 on:
   workflow_dispatch:
     inputs:
@@ -14,14 +13,11 @@ on:
         default: '2'
         type: choice
         options: ['1', '2', '3']
-
 permissions:
   contents: read
-
 concurrency:
   group: icsm-ipa-${{ github.ref }}
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: xcode-27
@@ -30,25 +26,20 @@ jobs:
       PYTHONUNBUFFERED: '1'
       ICSM_BUNDLE_ID: ${{ inputs.bundle_id }}
       ICSM_BUILD_JOBS: ${{ inputs.jobs }}
-
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-
       - name: Patch icsm.py & verify_ipa.py for iOS 16 deployment
         run: |
           set -o pipefail
           # 1. Override deployment target 27.0 -> 16.0
           sed -i '' 's/-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0/-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0/g' icsm.py
-
           # 2. Disable mandatory iPhoneOS 27.x SDK check in icsm.py
           sed -i '' "s/if '27.' not in output(\['xcrun', '--sdk', 'iphoneos', '--show-sdk-version'\]):/if False: # skipped SDK check/g" icsm.py
-
-          # 3. 【新增】屏蔽 verify_ipa.py 的 MinimumOSVersion >=27 校验
+          # 3. 屏蔽 verify_ipa.py 的 MinimumOSVersion >=27 校验
           sed -i '' 's/require(float(info\['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'')/# require(float(info['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'') # patched for iOS16/g' scripts/verify_ipa.py
-
           echo "=== Patch verification ==="
           echo "Deployment target in icsm.py:"
           grep -o "CMAKE_OSX_DEPLOYMENT_TARGET=.*" icsm.py || true
@@ -60,6 +51,35 @@ jobs:
           grep -n "patched for iOS16" scripts/verify_ipa.py || true
           echo "=========================="
 
+      # ========== 新增：禁用 MetalFX 修复 A11 启动闪退 ==========
+      - name: Patch source to disable MetalFX (fix A11 launch crash)
+        run: |
+          set -o pipefail
+          # 1. 全局关闭 MetalFX 功能总开关
+          find Sources -type f \( -name "*.mm" -o -name "*.m" -o -name "*.h" \) | xargs sed -i '' 's/useMetalFX = YES/useMetalFX = NO/g'
+          
+          # 2. 注释掉 MetalFX 空间超分运行时初始化
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) | xargs sed -i '' 's#\[self setupMetalFXRuntime\]#//[self setupMetalFXRuntime] /* A11 compat: MetalFX disabled */#g'
+          
+          # 3. 注释掉 MetalFX 帧插值初始化
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) | xargs sed -i '' 's#\[self setupFrameInterpolation\]#//[self setupFrameInterpolation] /* A11 compat: MetalFX disabled */#g'
+          
+          # 4. 兜底禁用 MetalFX 核心类实例化，防止残留调用
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) | xargs sed -i '' 's#MTLFXSpatialScaler alloc#//MTLFXSpatialScaler alloc /* A11 compat: MetalFX disabled */#g'
+          
+          # 验证补丁是否生效
+          echo "=== MetalFX patch verification ==="
+          echo "Uncommented setupMetalFXRuntime calls:"
+          grep -rn "setupMetalFXRuntime" Sources --include="*.m" --include="*.mm" | grep -v "//" || echo "None ✅"
+          echo ""
+          echo "Remaining useMetalFX = YES:"
+          grep -rn "useMetalFX = YES" Sources --include="*.m" --include="*.mm" --include="*.h" || echo "None ✅"
+          echo ""
+          echo "Uncommented MTLFXSpatialScaler calls:"
+          grep -rn "MTLFXSpatialScaler" Sources --include="*.m" --include="*.mm" | grep -v "//" || echo "None ✅"
+          echo "==================================="
+      # ========================================================
+
       - name: Check Apple toolchain
         run: |
           test "$(uname -m)" = arm64
@@ -67,13 +87,11 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-version
           python3 --version
           df -h .
-
       - name: Compile native modules and export IPA
         run: |
           set -o pipefail
           mkdir -p Build
           ./icsm build --unsigned --bundle-id "$ICSM_BUNDLE_ID" --jobs "$ICSM_BUILD_JOBS" 2>&1 | tee Build/cloud-build.log
-
       - name: Verify iOS minimum version (vtool binary check)
         run: |
           unzip -q -o Build/iCSM-unsigned.ipa -d Build/ipa-tmp
@@ -92,7 +110,6 @@ jobs:
           fi
           
           rm -rf Build/ipa-tmp
-
       - name: Verify app and all 35 frameworks
         run: |
           python3 scripts/verify_ipa.py Build/iCSM-unsigned.ipa --unsigned --report Build/ipa-report.json
@@ -104,16 +121,13 @@ jobs:
           ## iCSM IPA ready (A11 / iOS 16 build)
           Download **iCSM-IPA-A11-iOS16** under **Artifacts** below and extract it.
           Re-sign **iCSM-unsigned.ipa** with your own Apple account before installing.
-
           ⚠️ A11 device notice (iPhone X / 8 / 8 Plus)
-          - A11 chip does NOT support MetalFX. You must remove MTLFX calls from source code, otherwise the app will crash on launch.
+          - MetalFX has been disabled in this build to fix launch crash on A11 chip.
           - iPhone 8 / 8 Plus (2GB RAM) has high risk of being killed due to memory limit; iPhone X (3GB) performs better.
-
           No Apple account, certificate, device ID or game data is uploaded to the build runner.
           See **docs/CLOUD_BUILD.en.md** for Windows installation and data import.
           TEXT
           cat Build/ipa-report.json >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload IPA and verification report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -126,7 +140,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           compression-level: 0
-
       - name: Upload build log if the build fails
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
