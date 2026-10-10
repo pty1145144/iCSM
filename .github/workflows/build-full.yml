@@ -41,6 +41,60 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Patch sources for iOS 16 / A11 compatibility
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          # 1. icsm.py: deployment target 27.0 -> 16.0 + skip mandatory SDK 27 check
+          sed -i '' 's/-DCMAKE_OSX_DEPLOYMENT_TARGET=27.0/-DCMAKE_OSX_DEPLOYMENT_TARGET=16.0/g' icsm.py
+          sed -i '' "s/if '27.' not in output(\['xcrun', '--sdk', 'iphoneos', '--show-sdk-version'\]):/if False: # skipped SDK check/g" icsm.py
+          # 2. verify_ipa.py: skip MinimumOSVersion >= 27 check
+          sed -i '' 's/require(float(info\['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'')/# require(float(info['\''MinimumOSVersion'\'']) >= 27, '\''Incorrect deployment target'\'') # patched for iOS16/g' scripts/verify_ipa.py
+          # 3. build_data.py: skip iPhoneOS 27.x SDK requirement (A11 uses iOS 16)
+          sed -i '' "s/require(sdk_version.split('\.')\[0\] == '27', 'This mobile release requires the iPhoneOS 27\.x SDK')/require(True, 'SDK check skipped for iOS16')/g" scripts/build_data.py
+          # 4. Data/shaders.json: compile Metal for iOS 16, language 3.2 -> 2.4
+          sed -i '' 's/air64-apple-ios27\.0/air64-apple-ios16.0/g' Data/shaders.json
+          sed -i '' 's/-std=metal3\.2/-std=metal2.4/g' Data/shaders.json
+          # 5. Disable MetalFX (A11 chip does not support MetalFX)
+          find Sources -type f \( -name "*.mm" -o -name "*.m" -o -name "*.h" \) \
+            -exec sed -i '' 's/useMetalFX = YES/useMetalFX = NO/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) \
+            -exec sed -i '' 's#\[self setupMetalFXRuntime\]#//[self setupMetalFXRuntime] /* A11 compat disabled */#g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) \
+            -exec sed -i '' 's#\[self setupFrameInterpolation\]#//[self setupFrameInterpolation] /* A11 compat disabled */#g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) \
+            -exec sed -i '' 's#MTLFXSpatialScaler alloc#//MTLFXSpatialScaler alloc /* A11 compat disabled */#g' {} +
+          # 6. Runtime shader language version 3.2 -> 2.4
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/MTLLanguageVersion3_2/MTLLanguageVersion2_4/g' {} +
+          # 7. iOS 17-only UIWindowScene.effectiveGeometry -> iOS 16 equivalents
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/scene\.effectiveGeometry\.coordinateSpace\.bounds\.size/scene.screen.bounds.size/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/view\.window\.windowScene\.effectiveGeometry\.isInteractivelyResizing/false/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/v\.window\.windowScene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/view\.window\.windowScene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/window\.windowScene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/scene\.effectiveGeometry\.interfaceOrientationLocked/NO/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/scene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
+          echo "=== Full build iOS16 patch verification ==="
+          echo "Deployment target:"
+          grep -o "CMAKE_OSX_DEPLOYMENT_TARGET=.*" icsm.py || true
+          echo "SDK check skipped:"
+          grep -n "skipped SDK check" icsm.py scripts/build_data.py || true
+          echo "verify_ipa patched:"
+          grep -n "patched for iOS16" scripts/verify_ipa.py || true
+          echo "shader target/options:"
+          grep -n "air64-apple-ios\|std=metal" Data/shaders.json || true
+          echo "effectiveGeometry remaining (comments only ok):"
+          grep -rn "effectiveGeometry" Sources --include="*.mm" --include="*.inc" | grep -v "//" || echo "No effectiveGeometry remaining OK"
+          echo "=================================================="
+
       - name: Compile Metal shader libraries and matching manifest
         run: |
           set -o pipefail
