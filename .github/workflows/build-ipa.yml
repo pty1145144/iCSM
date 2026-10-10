@@ -87,6 +87,21 @@ jobs:
           echo "==================================="
       # ========================================================
 
+      # ========== 新增：Metal shader 语言版本降到 2.4（A11 / iOS 16） ==========
+      - name: Patch Metal language version to 2.4 (fix A11 shader compile crash)
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          # A11 GPU (iPhone X / 8 / 8 Plus) supports Metal Shading Language up to 2.4.
+          # The port hardcodes MTLLanguageVersion3_2 for runtime shader compilation,
+          # which fails on A11 and crashes the app at launch.
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/MTLLanguageVersion3_2/MTLLanguageVersion2_4/g' {} +
+          echo "=== Metal language version patch verification ==="
+          grep -rn "MTLLanguageVersion" Sources --include="*.mm" --include="*.inc" | grep -v "MTLLanguageVersion2_4" || echo "All runtime shader compiles use 2_4 OK"
+          echo "==================================================="
+      # ========================================================
+
       - name: Check Apple toolchain
         run: |
           test "$(uname -m)" = arm64
@@ -130,6 +145,7 @@ jobs:
           Re-sign **iCSM-unsigned.ipa** with your own Apple account before installing.
           ⚠️ A11 device notice (iPhone X / 8 / 8 Plus)
           - MetalFX has been disabled in this build to fix launch crash on A11 chip.
+          - Metal shader language version has been downgraded to 2.4 for A11 compatibility.
           - iPhone 8 / 8 Plus (2GB RAM) has high risk of being killed due to memory limit; iPhone X (3GB) performs better.
           No Apple account, certificate, device ID or game data is uploaded to the build runner.
           See **docs/CLOUD_BUILD.en.md** for Windows installation and data import.
