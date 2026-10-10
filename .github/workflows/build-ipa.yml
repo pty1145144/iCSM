@@ -51,23 +51,30 @@ jobs:
           grep -n "patched for iOS16" scripts/verify_ipa.py || true
           echo "=========================="
 
-      # ========== 新增：禁用 MetalFX 修复 A11 启动闪退 ==========
+      # ========== 修复版：禁用 MetalFX 修复 A11 启动闪退 ==========
       - name: Patch source to disable MetalFX (fix A11 launch crash)
         run: |
           set -o pipefail
-          # 1. 全局关闭 MetalFX 功能总开关
-          find Sources -type f \( -name "*.mm" -o -name "*.m" -o -name "*.h" \) | xargs sed -i '' 's/useMetalFX = YES/useMetalFX = NO/g'
-          
-          # 2. 注释掉 MetalFX 空间超分运行时初始化
-          find Sources -type f \( -name "*.mm" -o -name "*.m" \) | xargs sed -i '' 's#\[self setupMetalFXRuntime\]#//[self setupMetalFXRuntime] /* A11 compat: MetalFX disabled */#g'
-          
-          # 3. 注释掉 MetalFX 帧插值初始化
-          find Sources -type f \( -name "*.mm" -o -name "*.m" \) | xargs sed -i '' 's#\[self setupFrameInterpolation\]#//[self setupFrameInterpolation] /* A11 compat: MetalFX disabled */#g'
-          
-          # 4. 兜底禁用 MetalFX 核心类实例化，防止残留调用
-          find Sources -type f \( -name "*.mm" -o -name "*.m" \) | xargs sed -i '' 's#MTLFXSpatialScaler alloc#//MTLFXSpatialScaler alloc /* A11 compat: MetalFX disabled */#g'
-          
-          # 验证补丁是否生效
+          # Force C locale to fix BSD sed illegal byte sequence error
+          export LC_ALL=C
+
+          # 1. Global disable MetalFX main switch
+          find Sources -type f \( -name "*.mm" -o -name "*.m" -o -name "*.h" \) \
+            -exec sed -i '' 's/useMetalFX = YES/useMetalFX = NO/g' {} +
+
+          # 2. Comment out MetalFX spatial scaler initialization
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) \
+            -exec sed -i '' 's#\[self setupMetalFXRuntime\]#//[self setupMetalFXRuntime] /* A11 compat disabled */#g' {} +
+
+          # 3. Comment out MetalFX frame interpolation initialization
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) \
+            -exec sed -i '' 's#\[self setupFrameInterpolation\]#//[self setupFrameInterpolation] /* A11 compat disabled */#g' {} +
+
+          # 4. Comment out MTLFXSpatialScaler instantiation
+          find Sources -type f \( -name "*.mm" -o -name "*.m" \) \
+            -exec sed -i '' 's#MTLFXSpatialScaler alloc#//MTLFXSpatialScaler alloc /* A11 compat disabled */#g' {} +
+
+          # Verify patch result
           echo "=== MetalFX patch verification ==="
           echo "Uncommented setupMetalFXRuntime calls:"
           grep -rn "setupMetalFXRuntime" Sources --include="*.m" --include="*.mm" | grep -v "//" || echo "None ✅"
