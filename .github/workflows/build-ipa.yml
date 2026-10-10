@@ -112,13 +112,18 @@ jobs:
           # 1. Size sampling -> scene.screen.bounds (iOS 13+)
           find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
             -exec sed -i '' 's/scene\.effectiveGeometry\.coordinateSpace\.bounds\.size/scene.screen.bounds.size/g' {} +
-          # 2. Interactive resize probe -> always false on iOS 16
+          # 2. Interactive resize probe -> always false on iOS 16 (match full prefix)
           find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
-            -exec sed -i '' 's/window\.windowScene\.effectiveGeometry\.isInteractivelyResizing/false/g' {} +
-          # 3. Window-scene orientation -> UIDevice orientation (same raw values)
+            -exec sed -i '' 's/view\.window\.windowScene\.effectiveGeometry\.isInteractivelyResizing/false/g' {} +
+          # 3. Orientation probes -> UIDevice orientation (same raw values).
+          #    Match the complete dotted prefix so no dangling "window." remains.
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/v\.window\.windowScene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
+          find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
+            -exec sed -i '' 's/view\.window\.windowScene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
           find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
             -exec sed -i '' 's/window\.windowScene\.effectiveGeometry\.interfaceOrientation/(UIInterfaceOrientation)UIDevice.currentDevice.orientation/g' {} +
-          # 4. Scene orientation lock -> NO
+          # 4. Scene orientation lock -> NO (BEFORE the plain orientation rule below)
           find Sources -type f \( -name "*.mm" -o -name "*.inc" \) \
             -exec sed -i '' 's/scene\.effectiveGeometry\.interfaceOrientationLocked/NO/g' {} +
           # 5. Scene orientation -> UIDevice orientation
