@@ -193,6 +193,225 @@ jobs:
           python3 -c "import json; json.load(open('native-build-plan.json')); print('JSON OK')"
           echo "=================================================="
 
+      # ========== 修复版 v2：text_provider/v8/engine 缺失 iOS16 POSIX 符号补丁 ==========
+      # 启动报错: Symbol not found: _pipe2 (dlopen panoramauiclient 失败)
+      # pipe2/strndup/vasprintf/stpcpy/getprogname/fnmatch/backtrace/posix_madvise
+      # 是 macOS/Linux POSIX 符号，iOS 16 libSystem 没有。预编译的 GLib/Pango/V8
+      # 静态库引用了它们 -> dlopen 时符号解析失败 -> "游戏启动失败/资源加载未完成"。
+      # 用 stub 实现补齐，注入 text_provider / v8 / engine 三个 framework 的链接参数。
+      - name: Patch missing POSIX symbols for iOS 16 (pipe2/strndup/vasprintf/...)
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          mkdir -p Build/native/i4/objects Build/native/i5/objects
+          cat > Build/native/i4/objects/posix_stub.c <<'STUB_EOF'
+          #include <stdarg.h>
+          #include <stdio.h>
+          #include <stdlib.h>
+          #include <string.h>
+          #include <fcntl.h>
+          #include <unistd.h>
+          #include <errno.h>
+          #include <sys/mman.h>
+
+          /* pipe2: iOS libSystem 无此符号 (macOS/Linux POSIX). pipe + fcntl 实现 */
+          int pipe2(int fds[2], int flags) {
+              if (fds == 0) { errno = EFAULT; return -1; }
+              if (pipe(fds) != 0) return -1;
+              if (flags & O_CLOEXEC) {
+                  if (fcntl(fds[0], F_SETFD, FD_CLOEXEC) < 0 || fcntl(fds[1], F_SETFD, FD_CLOEXEC) < 0) {
+                      int e = errno; close(fds[0]); close(fds[1]); errno = e; return -1;
+                  }
+              }
+              if (flags & O_NONBLOCK) {
+                  int f0 = fcntl(fds[0], F_GETFL, 0), f1 = fcntl(fds[1], F_GETFL, 0);
+                  if (f0 < 0 || f1 < 0) { int e = errno; close(fds[0]); close(fds[1]); errno = e; return -1; }
+                  if (fcntl(fds[0], F_SETFL, f0 | O_NONBLOCK) < 0 || fcntl(fds[1], F_SETFL, f1 | O_NONBLOCK) < 0) {
+                      int e = errno; close(fds[0]); close(fds[1]); errno = e; return -1;
+                  }
+              }
+              return 0;
+          }
+
+          /* strndup: iOS 无此符号 */
+          char *strndup(const char *s, size_t n) {
+              if (s == 0) { errno = EINVAL; return 0; }
+              size_t len = strnlen(s, n);
+              char *p = (char *)malloc(len + 1);
+              if (p == 0) { errno = ENOMEM; return 0; }
+              memcpy(p, s, len);
+              p[len] = '\0';
+              return p;
+          }
+
+          /* stpcpy: 返回 dst+strlen(src) */
+          char *stpcpy(char *dst, const char *src) {
+              char *d = dst;
+              if (dst == 0 || src == 0) return dst;
+              while ((*d = *src) != '\0') { d++; src++; }
+              return d;
+          }
+
+          /* vasprintf / vasprintf_l: iOS 无此符号 */
+          int vasprintf(char **strp, const char *fmt, va_list ap) {
+              if (strp == 0 || fmt == 0) { errno = EINVAL; return -1; }
+              va_list ap2;
+              va_copy(ap2, ap);
+              int len = vsnprintf(0, 0, fmt, ap2);
+              va_end(ap2);
+              if (len < 0) return -1;
+              char *buf = (char *)malloc((size_t)len + 1);
+              if (buf == 0) { errno = ENOMEM; return -1; }
+              va_copy(ap2, ap);
+              vsnprintf(buf, (size_t)len + 1, fmt, ap2);
+              va_end(ap2);
+              *strp = buf;
+              return len;
+          }
+          int vasprintf_l(char **strp, void *loc, const char *fmt, va_list ap) {
+              (void)loc;
+              return vasprintf(strp, fmt, ap);
+          }
+
+          /* getprogname: iOS 无此符号 (macOS 有) */
+          const char *getprogname(void) {
+              return "CSGOI5Client";
+          }
+
+          /* fnmatch 简化实现 (* ? [set]) */
+          #define FNM_NOMATCH 1
+          int fnmatch(const char *pattern, const char *string, int flags) {
+              (void)flags;
+              if (pattern == 0 || string == 0) return FNM_NOMATCH;
+              const char *p = pattern, *s = string;
+              while (*p) {
+                  if (*p == '*') {
+                      p++;
+                      if (!*p) return 0;
+                      while (*s) {
+                          if (fnmatch(p, s, 0) == 0) return 0;
+                          s++;
+                      }
+                      return FNM_NOMATCH;
+                  } else if (*p == '?') {
+                      if (!*s) return FNM_NOMATCH;
+                      p++; s++;
+                  } else if (*p == '[') {
+                      if (!*s) return FNM_NOMATCH;
+                      int neg = 0, match = 0;
+                      p++;
+                      if (*p == '!' || *p == '^') { neg = 1; p++; }
+                      if (*p == ']') { if (*s == ']') match = 1; p++; }
+                      while (*p && *p != ']') {
+                          if (p[1] == '-' && p[2] && p[2] != ']') {
+                              if (*s >= p[0] && *s <= p[2]) match = 1;
+                              p += 3;
+                          } else {
+                              if (*s == p[0]) match = 1;
+                              p++;
+                          }
+                      }
+                      if (*p == ']') p++;
+                      if (neg) match = !match;
+                      if (!match) return FNM_NOMATCH;
+                      s++;
+                  } else {
+                      if (*p != *s) return FNM_NOMATCH;
+                      p++; s++;
+                  }
+              }
+              return *s ? FNM_NOMATCH : 0;
+          }
+
+          /* backtrace / backtrace_symbols: iOS 无此符号 (macOS 有) */
+          int backtrace(void **buffer, int size) {
+              (void)buffer; (void)size;
+              return 0;
+          }
+          char **backtrace_symbols(void *const *buffer, int size) {
+              (void)buffer; (void)size;
+              return 0;
+          }
+
+          /* posix_madvise: 转调 madvise */
+          int posix_madvise(void *addr, size_t len, int advice) {
+              return madvise(addr, len, advice);
+          }
+
+          /* realpath$DARWIN_EXTSN: 若 iOS 无此符号版本则补 */
+          char *realpath(const char *path, char *resolved);
+          char *realpath$DARWIN_EXTSN(const char *path, char *resolved) __asm("_realpath$DARWIN_EXTSN");
+          char *realpath$DARWIN_EXTSN(const char *path, char *resolved) {
+              return realpath(path, resolved);
+          }
+
+          /* basename: GNU 语义（不修改输入） */
+          char *basename(char *path) {
+              if (path == 0 || *path == '\0') return (char *)".";
+              size_t len = strlen(path);
+              const char *end = path + len;
+              while (end > path && end[-1] == '/') end--;
+              if (end == path) return (char *)"/";
+              const char *start = end;
+              while (start > path && start[-1] != '/') start--;
+              return (char *)start;
+          }
+
+          /* OpenSSL BIO recvmmsg/sendmmsg (Linux-only paths) + CRYPTO_strndup */
+          int BIO_recvmmsg(void *fd, void *msgvec, unsigned int vlen, unsigned int flags, void *timeout) {
+              (void)fd; (void)msgvec; (void)vlen; (void)flags; (void)timeout;
+              errno = ENOSYS;
+              return -1;
+          }
+          int BIO_sendmmsg(void *fd, void *msgvec, unsigned int vlen, unsigned int flags) {
+              (void)fd; (void)msgvec; (void)vlen; (void)flags;
+              errno = ENOSYS;
+              return -1;
+          }
+          void *CRYPTO_strndup(const char *str, size_t s) {
+              return strndup(str, s);
+          }
+          STUB_EOF
+          cp Build/native/i4/objects/posix_stub.c Build/native/i5/objects/posix_stub.c
+          xcrun -sdk iphoneos clang -arch arm64 -O2 -c Build/native/i4/objects/posix_stub.c -o Build/native/i4/objects/posix_stub.o
+          xcrun -sdk iphoneos clang -arch arm64 -O2 -c Build/native/i5/objects/posix_stub.c -o Build/native/i5/objects/posix_stub.o
+          # 注入 link argv：text_provider / v8 / engine 的 link 任务加上 stub.o
+          python3 - <<'PY_EOF'
+          import json
+          plan_path = 'native-build-plan.json'
+          plan = json.load(open(plan_path, encoding='utf-8'))
+          patched = []
+          for item in plan['jobs']:
+              if item.get('kind') != 'link':
+                  continue
+              out = item.get('output', '')
+              if not (out.endswith('/text_provider.framework/text_provider')
+                      or out.endswith('/v8.framework/v8')
+                      or out.endswith('/engine.framework/engine')):
+                  continue
+              level = 'i5' if '/i5/' in out else 'i4'
+              stub = '$ROOT/Build/native/%s/objects/posix_stub.o' % level
+              argv = item['argv']
+              if stub in argv:
+                  continue
+              for i, a in enumerate(argv):
+                  if a.endswith('.o') and '$ROOT' in a and 'objects/' in a:
+                      argv.insert(i + 1, stub)
+                      patched.append((out.split('Frameworks/')[-1], stub))
+                      break
+          json.dump(plan, open(plan_path, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+          print('patched links:')
+          for o, s in patched:
+              print('  ', o, '->', s)
+          print('total:', len(patched))
+          PY_EOF
+          echo "=== POSIX stub patch verification ==="
+          echo "posix_stub.o references in plan:"
+          grep -n "posix_stub.o" native-build-plan.json | head -n 8
+          echo "stub object files:"
+          ls -la Build/native/i4/objects/posix_stub.o Build/native/i5/objects/posix_stub.o
+          echo "=================================================="
+
       - name: Compile Metal shader libraries and matching manifest
         run: |
           set -o pipefail
