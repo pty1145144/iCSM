@@ -141,6 +141,32 @@ jobs:
           fi
           echo "=================================================="
 
+      # ========== 修复版：UICornerConfiguration 等 iOS 17+ corner API 降级为 CALayer（iOS 16 无 UICornerConfiguration/UICornerRadius/effectiveRadiusForCorner，SDL2 二进制因此符号缺失 -> launcher dlopen 失败） ==========
+      - name: Patch UICornerConfiguration iOS 17+ corner APIs to CALayer (iOS 16 compat)
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          # iCSM touch UI 使用 iOS 17+ 的 corner 体系（UICornerConfiguration / UICornerRadius /
+          # UIView.cornerConfiguration / effectiveRadiusForCorner），iOS 16 无这些符号，
+          # 且代码被编入 SDL2-2.0.framework -> dlopen launcher 时 Symbol not found。
+          # 降级为 CALayer.cornerRadius / cornerCurve（iOS 13+ 可用），圆角效果保留。
+          for f in Sources/workspace/ipados-arm64/touch/translucent_surface_ios.inc \
+                   Sources/workspace/ipados-arm64/touch/glass_navigation_ios.inc \
+                   Sources/workspace/ipados-arm64/touch/console_header_ios.inc; do
+            sed -i '' \
+              -e 's/self\.blurView\.cornerConfiguration=self\.cornerConfiguration/self.blurView.layer.cornerRadius=self.layer.cornerRadius/g' \
+              -e 's/\[\([A-Za-z0-9_.]*\) effectiveRadiusForCorner:UIRectCorner\(TopLeft\|AllCorners\)\]/\1.layer.cornerRadius/g' \
+              -e 's/UICornerConfiguration \*corners=\[UICornerConfiguration configurationWithUniformRadius:\[UICornerRadius fixedRadius:\([0-9A-Za-z_]*\)\]\]/CGFloat corners=\1/g' \
+              -e 's/glass\.cornerConfiguration=corners/glass.layer.cornerRadius=corners/g' \
+              -e 's/\.cornerConfiguration=\[UICornerConfiguration configurationWithUniformRadius:\[UICornerRadius fixedRadius:\([0-9A-Za-z_]*\)\]\]/.layer.cornerRadius=\1/g' \
+              -e 's/\.cornerConfiguration=\[UICornerConfiguration configurationWithUniformRadius:\[UICornerRadius containerConcentricRadius\]\]/.layer.cornerRadius=8/g' \
+              -e 's/\.cornerConfiguration=UICornerConfiguration\.capsuleConfiguration/.layer.cornerRadius=16/g' \
+              "$f"
+          done
+          echo "=== UICorner iOS17 corner API patch verification ==="
+          grep -rn "UICornerConfiguration\|UICornerRadius\|effectiveRadiusForCorner\|cornerConfiguration" Sources/workspace/ipados-arm64/touch --include="*.inc" || echo "No iOS17 corner APIs remaining OK"
+          echo "=================================================="
+
       - name: Compile Metal shader libraries and matching manifest
         run: |
           set -o pipefail
