@@ -96,6 +96,29 @@ jobs:
           grep -rn "effectiveGeometry" Sources --include="*.mm" --include="*.inc" | grep -v "//" || echo "No effectiveGeometry remaining OK"
           echo "=================================================="
 
+      # ========== 修复版：TouchController 硬链接改弱链接（iOS 26+ 私有框架，iOS16 缺失导致 dlopen launcher.framework 失败） ==========
+      - name: Patch TouchController to weak link (fix launcher dlopen on iOS 16)
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          # SDL2-2.0.framework hard-links TouchController (iOS 26+ private framework).
+          # On iOS 16 TouchController is absent -> dyld cannot load launcher.framework
+          # -> "游戏启动失败 / 资源加载未完成". Weak link makes dyld ignore the missing
+          # framework; the runtime [TCTouchController isSupported] nil-message guard
+          # disables the touch-controller feature safely (no code change needed).
+          perl -0pi -e 's/"-framework",\n\s*"TouchController",/"-weak_framework",\n        "TouchController",/g' native-build-plan.json
+          echo "=== TouchController weak-link patch verification ==="
+          echo "Context before 'TouchController':"
+          grep -n -B1 '"TouchController"' native-build-plan.json | head -n 6
+          echo "Hard link remaining check:"
+          if grep -n -A1 '"-framework",' native-build-plan.json | grep -q '"TouchController"'; then
+            echo "FAIL: hard -framework TouchController still present"
+            exit 1
+          else
+            echo "OK: TouchController is now weak-linked"
+          fi
+          echo "=================================================="
+
       - name: Compile Metal shader libraries and matching manifest
         run: |
           set -o pipefail
