@@ -119,6 +119,28 @@ jobs:
           fi
           echo "=================================================="
 
+      # ========== 修复版：source_metal 硬链接 MetalFX 改弱链接（MTLFXFrameInterpolatorDescriptor 是 iOS 17+ 类，iOS16 的 MetalFX.framework 无此符号 -> launcher dlopen 失败） ==========
+      - name: Patch source_metal to weak-link MetalFX (fix MTLFXFrameInterpolatorDescriptor symbol on iOS 16)
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          # source_metal.framework 链接了 MTLFXFrameInterpolatorDescriptor（iOS 17+ 类）。
+          # iOS 16 的 MetalFX.framework 存在但不含该符号 -> 硬链接使 dlopen 符号解析失败
+          # -> "游戏启动失败 / 资源加载未完成". 弱链接后符号缺失不阻止加载；
+          # MetalFX 调用已在源码禁用（useMetalFX = NO），不会触发空符号，安全。
+          perl -0pi -e 's/"-framework",\n\s*"MetalFX"/"-weak_framework",\n        "MetalFX"/g' native-build-plan.json
+          echo "=== MetalFX weak-link patch verification ==="
+          echo "Context before 'MetalFX':"
+          grep -n -B1 '"MetalFX"' native-build-plan.json | head -n 6
+          echo "Hard link remaining check:"
+          if grep -n -A1 '"-framework",' native-build-plan.json | grep -q '"MetalFX"'; then
+            echo "FAIL: hard -framework MetalFX still present"
+            exit 1
+          else
+            echo "OK: MetalFX is now weak-linked"
+          fi
+          echo "=================================================="
+
       - name: Compile Metal shader libraries and matching manifest
         run: |
           set -o pipefail
