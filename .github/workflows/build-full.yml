@@ -214,6 +214,45 @@ jobs:
           #include <errno.h>
           #include <sys/mman.h>
 
+          /* iOS SDK fortify 宏（secure/_string.h 等）会把 stpcpy 等名字改写成
+             __builtin_*_chk，必须先取消宏再定义同名函数，否则编译报错 */
+          #ifdef stpcpy
+          #undef stpcpy
+          #endif
+          #ifdef strndup
+          #undef strndup
+          #endif
+          #ifdef vasprintf
+          #undef vasprintf
+          #endif
+          #ifdef vasprintf_l
+          #undef vasprintf_l
+          #endif
+          #ifdef basename
+          #undef basename
+          #endif
+          #ifdef realpath
+          #undef realpath
+          #endif
+          #ifdef fnmatch
+          #undef fnmatch
+          #endif
+          #ifdef getprogname
+          #undef getprogname
+          #endif
+          #ifdef backtrace
+          #undef backtrace
+          #endif
+          #ifdef backtrace_symbols
+          #undef backtrace_symbols
+          #endif
+          #ifdef posix_madvise
+          #undef posix_madvise
+          #endif
+          #ifdef pipe2
+          #undef pipe2
+          #endif
+
           /* pipe2: iOS libSystem 无此符号 (macOS/Linux POSIX). pipe + fcntl 实现 */
           int pipe2(int fds[2], int flags) {
               if (fds == 0) { errno = EFAULT; return -1; }
