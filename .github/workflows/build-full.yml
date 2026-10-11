@@ -167,6 +167,32 @@ jobs:
           grep -rn "UICornerConfiguration\|UICornerRadius\|effectiveRadiusForCorner\|cornerConfiguration" Sources/workspace/ipados-arm64/touch --include="*.inc" || echo "No iOS17 corner APIs remaining OK"
           echo "=================================================="
 
+      # ========== 修复版：A11 指令集（ARMv8.1 原子指令 LDAPRB 在 A11 上 SIGILL） ==========
+      # iOS 27 SDK 的 native-build-plan.json 全部 3796 条编译命令写死
+      # -miphoneos-version-min=27.0，clang 据此生成 ARMv8.1+ 原子指令
+      # （LDAPRB/STLR 等，std::atomic/mutex 常见）。A11（iPhone X, ARMv8.0）
+      # 执行这些指令直接 SIGILL（EXC_BAD_INSTRUCTION）。
+      # 崩溃点: tier0 LoggingSystem_RegisterLoggingChannel+48 处 ldaprb，
+      # 发生于 engine dlopen 时 tier0 全局静态初始化（__GLOBAL__sub_I_dbg.cpp）。
+      # 修复: 部署目标 27.0 -> 16.0 + 每条编译命令加 -mcpu=apple-a11，
+      # 让 clang 生成 A11 恰好支持的指令集。
+      - name: Patch native-build-plan for A11 instruction set (fix ldaprb SIGILL)
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          perl -0pi -e 's/"-miphoneos-version-min=27\.0",/"-miphoneos-version-min=16.0",/g' native-build-plan.json
+          perl -0pi -e 's/"-arch",\n\s*"arm64",/"-arch",\n        "arm64",\n        "-mcpu=apple-a11",/g' native-build-plan.json
+          echo "=== A11 instruction-set patch verification ==="
+          echo "miphoneos-version-min=27.0 remaining (should be 0):"
+          grep -c '"-miphoneos-version-min=27.0"' native-build-plan.json || echo "0 OK"
+          echo "miphoneos-version-min=16.0 count:"
+          grep -c '"-miphoneos-version-min=16.0"' native-build-plan.json
+          echo "-mcpu=apple-a11 count (should equal 3796):"
+          grep -c '"-mcpu=apple-a11"' native-build-plan.json
+          echo "JSON validity:"
+          python3 -c "import json; json.load(open('native-build-plan.json')); print('JSON OK')"
+          echo "=================================================="
+
       - name: Compile Metal shader libraries and matching manifest
         run: |
           set -o pipefail
