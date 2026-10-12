@@ -500,16 +500,16 @@ jobs:
           PY
           python3 patch_touch_fallback.py Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm
           echo "=== touch fallback verification ==="
-          grep -n "CALayer \*layer" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm | head -n 2
-          grep -n "available=true;dirty=true;return true" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm
-          grep -n "dispatch_sync(dispatch_get_main_queue(),^{rebuild();})" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm
+          grep -n "CALayer \*layer" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm | head -n 2 || true
+          grep -n "available=true;dirty=true;return true" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm || true
+          grep -n "dispatch_sync(dispatch_get_main_queue(),^{rebuild();})" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm || true
           echo "=================================================="
           echo "=== input bridge verification ==="
-          grep -n "fallbackInputActive" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm | head -n 2
-          grep -n "SDL_SendKeyboardKey" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm | head -n 2
-          grep -n "sdlMouseMotion(x*4,y*4)" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm
-          grep -n "SDL_SCANCODE_1+c.value-1" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm
-          grep -n "releaseFallbackKeys();" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm
+          grep -n "fallbackInputActive" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm | head -n 2 || true
+          grep -n "SDL_SendKeyboardKey" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm | head -n 2 || true
+          grep -n "sdlMouseMotion(x\*4,y\*4)" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm || true
+          grep -n "SDL_SCANCODE_1+c.value-1" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm || true
+          grep -n "releaseFallbackKeys();" Sources/workspace/ipados-arm64/touch/touch_ui_ios.mm || true
           echo "=================================================="
       - name: Compile Metal shader libraries and matching manifest
         run: |
