@@ -19,6 +19,11 @@ on:
         required: true
         default: zktfjcksxk-spec/iCSM
         type: string
+      rebuild_v8:
+        description: Rebuild V8/ICU without ARMv8.1 LSE atomics (required for iPhone X / A11; ~30min). Turn off for A12+ fast builds
+        required: true
+        default: 'true'
+        type: boolean
 
 permissions:
   contents: read
@@ -523,6 +528,148 @@ jobs:
           fi
           xcrun --sdk iphoneos metal --version
           python3 scripts/build_data.py shaders --jobs 2 2>&1 | tee Build/shader-build.log
+
+      - name: Cache rebuilt v8/icu libs (skip 30-60min rebuild on re-runs)
+        id: v8cache
+        uses: actions/cache@v4
+        with:
+          path: Sources/cache/i1/node/out/Release-iphoneos
+          key: icsm-v8-nolse-${{ inputs.rebuild_v8 }}-v1
+
+      - name: Rebuild V8 + ICU without LSE (A11 compatible)
+        if: inputs.rebuild_v8 == 'true' && steps.v8cache.outputs.cache-hit != 'true'
+        run: |
+          set -o pipefail
+          export LC_ALL=C
+          mkdir -p Build
+          echo "=== [1/7] Download node 16.20.2 (ships V8 9.4.146.26, matches iCSM) ==="
+          cd "$RUNNER_TEMP"
+          if [ ! -f node-v16.20.2.tar.gz ]; then
+            curl -fsSL -o node-v16.20.2.tar.gz https://nodejs.org/dist/v16.20.2/node-v16.20.2.tar.gz
+          fi
+          tar -xzf node-v16.20.2.tar.gz
+          cd node-v16.20.2
+          test -f deps/v8/src/base/atomicops.h || { echo "v8 source missing"; exit 1; }
+
+          echo "=== [2/7] Patch gyp for iOS flavor (16.20.2 has partial iOS support) ==="
+          # ninja.py: treat iOS like mac for static-lib alink (libtool)
+          perl -0pi -e 's/self\.flavor not in \("mac", "openbsd", "netbsd", "win"\)/self.flavor not in ("mac", "openbsd", "netbsd", "win", "ios")/' tools/gyp/pylib/gyp/generator/ninja.py
+          # ninja.py: alink rule for iOS
+          perl -0pi -e 's/if flavor != "mac" and flavor != "win":/if flavor != "mac" and flavor != "win" and flavor != "ios":/' tools/gyp/pylib/gyp/generator/ninja.py
+          # ninja.py: target_outputs filter (skip executable double-count)
+          perl -0pi -e 's/if qualified_target in all_targets:/if qualified_target in all_targets and '\''executable'\'' != target.type:/' tools/gyp/pylib/gyp/generator/ninja.py
+          # common.py: CopyTool maps iOS -> mac tool
+          perl -0pi -e 's/"aix": "flock",\n\s*"os400": "flock",/"aix": "flock",\n        "os400": "flock",\n        "ios": "mac",/' tools/gyp/pylib/gyp/common.py
+          echo "--- verify patches ---"
+          grep -n '"ios"' tools/gyp/pylib/gyp/generator/ninja.py | head -3
+          grep -n '"ios": "mac"' tools/gyp/pylib/gyp/common.py || echo "common.py patch MISSING"
+
+          echo "=== [3/7] Configure node for iOS arm64 (LSE disabled via -march=armv8-a) ==="
+          export CC_host="$(command -v clang)"
+          export CXX_host="$(command -v clang++)"
+          export CC="$(xcrun -sdk iphoneos -find clang)"
+          export CXX="$(xcrun -sdk iphoneos -find clang++)"
+          export AR="$(xcrun -sdk iphoneos -find ar)"
+          export AS="$(xcrun -sdk iphoneos -find as)"
+          export LD="$(xcrun -sdk iphoneos -find ld)"
+          export LIBTOOL="$(xcrun -sdk iphoneos -find libtool)"
+          export STRIP="$(xcrun -sdk iphoneos -find strip)"
+          export RANLIB="$(xcrun -sdk iphoneos -find ranlib)"
+          export SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
+          export IPHONEOS_DEPLOYMENT_TARGET="16.0"
+          # CRITICAL: -march=armv8-a forbids ARMv8.1 LSE atomics (A11 has no LSE)
+          export CXXFLAGS="-std=c++17 -O -arch arm64 -isysroot $SDK -march=armv8-a"
+          export CFLAGS="-O -arch arm64 -isysroot $SDK -march=armv8-a"
+          if [ "$(uname -m)" = "arm64" ]; then
+            export CXXFLAGS_host="-DV8_HOST_ARCH_ARM64 -std=c++17"
+          else
+            export CXXFLAGS_host="-DV8_HOST_ARCH_X64 -std=c++17"
+          fi
+          export CFLAGS_host=""
+          export GYP_DEFINES="target_arch=arm64 v8_target_arch=arm64 ios_target_arch=arm64 host_os=mac OS=ios"
+          ./configure \
+            --ninja \
+            --dest-cpu=arm64 \
+            --dest-os=ios \
+            --enable-static \
+            --with-intl=small-icu \
+            --cross-compiling \
+            --without-npm \
+            --without-inspector \
+            --without-ssl 2>&1 | tee "$GITHUB_WORKSPACE/Build/node-configure.log"
+          # ensure ninja binary (macOS arm64 runner)
+          command -v ninja >/dev/null 2>&1 || { curl -fsSL -o ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.11.1/ninja-mac.zip && unzip -o ninja.zip && chmod +x ninja && export PATH="$PWD:$PATH"; }
+
+          echo "=== [4/7] Build v8 + ICU static libs (A11-safe) ==="
+          ninja -C out/Release -j "$ICSM_BUILD_JOBS" -w dupbuild=warn \
+            obj/tools/v8_gypfiles/libv8_snapshot.a \
+            obj/tools/v8_gypfiles/libv8_base_without_compiler.a \
+            obj/tools/v8_gypfiles/libv8_compiler.a \
+            obj/tools/v8_gypfiles/libv8_initializers.a \
+            obj/tools/v8_gypfiles/libv8_libplatform.a \
+            obj/tools/v8_gypfiles/libv8_libbase.a \
+            obj/tools/v8_gypfiles/libv8_zlib.a \
+            obj/tools/icu/libicui18n.a \
+            obj/tools/icu/libicuucx.a \
+            obj/tools/icu/libicudata.a \
+            2>&1 | tee "$GITHUB_WORKSPACE/Build/v8-rebuild.log" || {
+            echo "Explicit targets failed, listing available lib targets:"
+            ninja -C out/Release -t targets all 2>/dev/null | grep -E "libv8|libicu" | head -40
+            echo "::error::ninja could not build explicit v8/icu targets; see v8-rebuild.log"
+            exit 1
+          }
+          echo "--- produced libs ---"
+          find out/Release/obj -name "libv8*.a" -o -name "libicu*.a" | sort
+
+          echo "=== [5/7] Install rebuilt libs over cached node libs ==="
+          DST="$GITHUB_WORKSPACE/Sources/cache/i1/node/out/Release-iphoneos"
+          ls "$DST" | head -20
+          for lib in libv8_snapshot libv8_base_without_compiler libv8_compiler libv8_initializers libv8_libplatform libv8_libbase libv8_zlib libicui18n libicuucx libicudata; do
+            found=$(find out/Release/obj -name "$lib.a" | head -1)
+            if [ -n "$found" ]; then
+              cp "$found" "$DST/$lib.a"
+              echo "replaced: $lib.a"
+            else
+              echo "WARN: $lib.a not found!"
+            fi
+          done
+
+          echo "=== [6/7] Verify zero LSE in rebuilt libs ==="
+          cat > "$GITHUB_WORKSPACE/Build/scan_rebuilt.py" <<'PYEOF'
+          import struct, sys, glob, os
+          TARGETS = ('libv8_snapshot.a','libv8_base_without_compiler.a','libv8_compiler.a',
+                     'libv8_initializers.a','libv8_libplatform.a','libv8_libbase.a','libv8_zlib.a',
+                     'libicui18n.a','libicuucx.a','libicudata.a')
+          def scan(path):
+              data = open(path, 'rb').read()
+              n = len(data)//4
+              words = struct.unpack('<%dI' % n, data[:4*n])
+              c = {'LSE_ATOMIC':0, 'LSE_CAS':0, 'LDAPR':0}
+              for w in words:
+                  if (w & 0x3F000000) == 0x38000000 and ((w>>15)&1) == 1:
+                      c['LSE_ATOMIC'] += 1
+                  if (w & 0x3F000000) == 0x38000000 and ((w>>15)&1) == 0 and ((w>>12)&0x7) == 5:
+                      c['LSE_CAS'] += 1
+                  if (w & 0x3FE00000) == 0x38A00000:
+                      c['LDAPR'] += 1
+              return c
+          root = sys.argv[1]
+          total = 0
+          for name in TARGETS:
+              p = root + '/' + name
+              if not os.path.exists(p):
+                  print('MISSING %-32s' % name); sys.exit(1)
+              c = scan(p); s = sum(c.values()); total += s
+              print('%-32s LSE=%d %s' % (name, s, c))
+          print('GRAND TOTAL LSE =', total)
+          if total > 0:
+              print('::error::rebuilt libs still contain LSE!'); sys.exit(1)
+          print('OK: all 10 rebuilt libs are ARMv8.0-only (A11 safe)')
+          PYEOF
+          cd "$GITHUB_WORKSPACE" && python3 Build/scan_rebuilt.py Sources/cache/i1/node/out/Release-iphoneos
+
+          echo "=== [7/7] Sanity: check v8 version header matches 9.4.146.26 ==="
+          grep -E "V8_MAJOR_VERSION|V8_MINOR_VERSION|V8_BUILD_NUMBER|V8_PATCH_LEVEL" "$RUNNER_TEMP/node-v16.20.2/deps/v8/include/v8-version.h" 2>/dev/null || echo "version header path changed, skip"
 
       - name: Build native frameworks and export matching IPA
         run: |
